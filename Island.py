@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 
-from exchange_items import level_1_items, level_2_items, level_3_items, level_4_items, level_5_items
+from exchange_items import trade_items
 
 T = TypeVar('T', bound='Save')
 
@@ -158,35 +158,24 @@ class IslandGraph(Save):
         pass_islands = []
         for group in pass_group:
             pass_islands.extend(self.group_island_map[group])
+        pass_islands.remove(end)
         return pass_islands
 
 
 class Exchange:
-    _weight = {item: 100 for item in level_1_items}
-    _weight.update({item: 800 for item in level_2_items})
-    _weight.update({item: 900 for item in level_3_items})
-    _weight.update({item: 1000 for item in level_4_items + level_5_items})
-
-    def __init__(self, source, target, ratio, swap_cost=11485, trades=None):
+    def __init__(self, island, source, target, ratio, swap_cost=11485, trades=None, level=None, weight=0):
+        self.island = island
         self.source = source
         self.target = target
         self.ratio = ratio
         self.swap_cost = swap_cost
-        self.weight = self._weight.get(target, 0)
+        self.weight = weight
 
         self.maximum_exchange = 10
-        if target in level_5_items:
-            self.maximum_exchange = 6
+        self.level = level
 
-        self.level = 1
-        if target in level_2_items:
-            self.level = 2
-        elif target in level_3_items:
-            self.level = 3
-        elif target in level_4_items:
-            self.level = 4
-        elif target in level_5_items:
-            self.level = 5
+        if self.level == 5:
+            self.maximum_exchange = 6
 
         self.trades = trades if trades else self.maximum_exchange
         self.remain_exchange = self.init_remain_exchange()
@@ -197,20 +186,31 @@ class Exchange:
         return self.trades
 
 
-class Stock:
+class Stock(Save):
+    trade_items = trade_items
+
     def __init__(self, stock=None):
+        super().__init__()
         if stock is None:
             stock = {}
 
-        all_items = level_1_items + level_2_items + level_3_items + level_4_items + level_5_items
+        all_items = [item['name'] for items in self.trade_items.values() for item in items]
+
         self._stock = stock.copy()
         unset_items = set(all_items) - set(stock.keys())
         self._stock.update({item: 0 for item in unset_items})
         self._calc_stock = self._stock.copy()
         self.stock = self._calc_stock
+        self.ori_stock = self._stock.copy()
+
+        self.item_level = self.update_item_level()
+        self.item_weight = self.update_item_weight()
 
     def __getitem__(self, item):
         return self.stock.get(item, 0)
+
+    def __setitem__(self, key, value):
+        self.stock[key] = value
 
     def switch_stock(self, is_calc=False):
         self.stock = self._calc_stock if is_calc else self._stock
@@ -219,6 +219,41 @@ class Stock:
         if exchange.level != 1:
             self.stock[exchange.source] -= trades
         self.stock[exchange.target] += trades * exchange.ratio
+
+    def undo_execute_exchange(self, exchange: Exchange, trades):
+        if exchange.level != 1:
+            self.stock[exchange.source] += trades
+        self.stock[exchange.target] -= trades * exchange.ratio
+
+    def restore(self):
+        self._stock = self.ori_stock.copy()
+        self._calc_stock = self.ori_stock.copy()
+
+    def update_trade_items(self, level, item):
+        self.trade_items[level].append({'name': item})
+
+    @staticmethod
+    def update_item_level():
+        item_level = {}
+        for level, items in trade_items.items():
+            for item in items:
+                item_level[item['name']] = level
+        return item_level
+
+    @staticmethod
+    def update_item_weight():
+        item_weight = {}
+        for level, items in trade_items.items():
+            for item in items:
+                weight = 100
+                if level == 2:
+                    weight = 800
+                elif level == 3:
+                    weight = 900
+                elif level == 4 or level == 5:
+                    weight = 1000
+                item_weight[item['name']] = weight
+        return item_weight
 
 
 class ExchangeGraph:
@@ -231,9 +266,9 @@ class ExchangeGraph:
 
     def add_trade(self, exchanges: dict):
         for island, args in exchanges.items():
-            self.graph[island] = Exchange(*args)
-        # print('add_trade')
-        # pprint(self.graph)
+            level = self.stock.item_level.get([args[1]])
+            weight = self.stock.item_weight.get([args[1]])
+            self.graph[island] = Exchange(island, *args, level, weight)
 
     def count_max_allowable_exchange(self, exchange: Exchange):
         if exchange.level == 1:
@@ -335,26 +370,37 @@ class ExchangeGraph:
         return available_exchange * exchange.ratio * exchange.weight
 
     def schedule_routes(self):
+        self.stock.restore()
+        self.stock.switch_stock(True)
+
         sorted_graph = dict(sorted(self.graph.items(), key=lambda x: self.get_exchange_weight(x[1]), reverse=True))
-        routes = {}
+        routes = defaultdict(dict)
 
         def find_routes(index, graph):
             if not graph:
                 return
 
-            routes[f'group_{index}'] = {}
             current_island = next(iter(graph))
             current_exchange = graph[current_island]
-
-            # print('=' * 42)
-            # print('main', current_exchange.source, 'to', current_exchange.target)
 
             remain_weight = self.ship_load_capacity
 
             max_allowable_exchange = self.count_max_allowable_exchange(current_exchange)
-            # print('max_allowable_exchange', max_allowable_exchange)
 
-            # execute exchange
+            if max_allowable_exchange <= 0:
+                return
+
+            if len(graph) <= 1:
+                routes[f'group_{index}'].update({
+                    current_island: {
+                        'source': current_exchange.source,
+                        'exchange': max_allowable_exchange,
+                        'target': current_exchange.target,
+                        'exchange_obj': current_exchange,
+                    }
+                })
+                return
+
             self.stock.execute_exchange(current_exchange, max_allowable_exchange)
             current_exchange.remain_exchange -= max_allowable_exchange
             remain_weight -= max_allowable_exchange * current_exchange.ratio * current_exchange.weight
@@ -364,6 +410,7 @@ class ExchangeGraph:
                     'source': current_exchange.source,
                     'exchange': max_allowable_exchange,
                     'target': current_exchange.target,
+                    'exchange_obj': current_exchange,
                 }
             })
 
@@ -415,8 +462,6 @@ class ExchangeGraph:
                 remain_weight -= available_merge_trades * merge_exchange.ratio * merge_exchange.weight
                 merge_exchange.remain_exchange -= available_merge_trades
 
-                # print('remain_weight', remain_weight)
-
                 graph.pop(merge_island)
                 if merge_exchange.remain_exchange > 0:
                     graph[merge_island] = merge_exchange
@@ -426,6 +471,7 @@ class ExchangeGraph:
                         'source': merge_exchange.source,
                         'exchange': available_merge_trades,
                         'target': merge_exchange.target,
+                        'exchange_obj': merge_exchange,
                     }
                 })
 
@@ -436,20 +482,10 @@ class ExchangeGraph:
 
             find_routes(index + 1, graph)
 
-        find_routes(0, sorted_graph)
-
-        # print('==============routes================')
-        # for group, route_path in routes.items():
-        #     print(f'******* {group} *********')
-        #     for island, exchange in route_path.items():
-        #         pprint(island)
-        #         pprint(exchange)
-
-        # print('================stock================')
-        # pprint(self.stock.stock)
-
-        # for island, exchange in self.graph.items():
-        #     print(exchange.source, 'to', exchange.target, exchange.remain_exchange)
+        try:
+            find_routes(0, sorted_graph)
+        except Exception as e:
+            print(e)
 
         return routes
 

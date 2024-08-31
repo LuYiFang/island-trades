@@ -10,12 +10,6 @@ from Island import ExchangeGraph, Stock, Exchange, IslandGraph
 from UI import MainWindow
 
 if __name__ == '__main__':
-    stock = Stock({
-        '蓮花': 3,
-        '豌豆': 5,
-        '櫻花': 2,
-    })
-
     island_graph = IslandGraph.read()
     if island_graph is None:
         island_graph = IslandGraph()
@@ -46,34 +40,6 @@ if __name__ == '__main__':
         island_graph.add_edge('O', 'J', 1)
 
         island_graph.cluster_islands(4)
-
-    # print('pass islands')
-    # print(island_graph.find_pass_islands('B', 'J'))
-
-    exchange_graph = ExchangeGraph('A', 11500, stock, island_graph)
-    exchange_graph.add_trade({
-        'A': ('蓮花', '海參', 3),
-        'B': ('海參', '茶杯', 3),
-        'C': ('茶杯', '靈丹', 2),
-        'D': ('靈丹', '密藥', 1),
-        'E': ('櫻花', '觸鬚', 3),
-        'F': ('觸鬚', '沙漏', 3),
-        'G': ('沙漏', '海賊刀', 2),
-        'H': ('海賊刀', '眼淚', 1),
-        'I': ('豌豆', '石板', 3),
-        'J': ('石板', '血液', 3),
-        'K': ('血液', '騎士槍', 2),
-        'L': ('騎士槍', '幼蟲', 1),
-        'M': ('麵糰', '蓮花', 1),
-        'N': ('羽毛', '櫻花', 1),
-        'O': ('皮革', '豌豆', 1),
-    })
-
-    # exchange_graph.schedule_routes()
-
-    # root = tk.Tk()
-    # app = UI(root)
-    # root.mainloop()
 
     app = QApplication(sys.argv)
     window = MainWindow(island_graph)
