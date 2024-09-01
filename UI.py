@@ -1,3 +1,6 @@
+import functools
+import logging
+
 from PyQt5 import QtCore
 
 from PyQt5.QtCore import QStringListModel, Qt
@@ -7,11 +10,9 @@ from PyQt5.QtWidgets import (
     QComboBox, QCheckBox, QVBoxLayout, QPushButton, QFormLayout, QSpinBox, QScrollArea, QHBoxLayout, QGroupBox,
     QListWidget, QListWidgetItem, QMainWindow, QListView, QGridLayout, QSizePolicy, QSpacerItem,
 )
+from PyQt5.QtCore import QThread, pyqtSignal
 
 from Island import ExchangeGraph, Stock
-from exchange_items import trade_items
-
-from PyQt5.QtCore import QThread, pyqtSignal
 
 
 class Worker(QThread):
@@ -22,6 +23,7 @@ class Worker(QThread):
         self.exchanges = exchanges
         self.exchange_graph = exchange_graph
 
+    # 
     def run(self):
         self.exchange_graph.add_trade(self.exchanges)
         routes = self.exchange_graph.schedule_routes()
@@ -45,12 +47,15 @@ class ScrollableWidget(QWidget):
 
         self.setLayout(main_layout)
 
+    # 
     def add_widget_to_scroll(self, widget):
         self.layout.addWidget(widget)
 
+    # 
     def insert_widget_to_scroll(self, index, widget):
         self.layout.insertWidget(index, widget)
 
+    # 
     def add_layout_to_scroll(self, layout):
         self.content_widget.setLayout(layout)
 
@@ -114,6 +119,7 @@ class TopWidget(QWidget):
 
         self.add_button.clicked.connect(self.add_item)
 
+    # 
     def add_item(self):
         level = self.level_combobox.currentText().replace('level_', '')
         try:
@@ -147,6 +153,7 @@ class ColorComboBox(QComboBox):
         self.init_options()
         self.currentIndexChanged.connect(self.update_background)
 
+    # 
     def init_options(self):
         for level, color in self.color_dict.items():
             for item_info in self.stock.trade_items.get(level, []):
@@ -155,10 +162,12 @@ class ColorComboBox(QComboBox):
 
         self.update_background(self.currentIndex())
 
+    # 
     def update_option(self, item, level):
         self.insertItem(0, item)
         self.setItemData(0, self.color_dict[level], Qt.BackgroundRole)
 
+    #
     def update_background(self, index):
         color = self.itemData(index, Qt.BackgroundRole)
         self.setStyleSheet(f"QComboBox {{ background-color: {color.name()}; color: white; }}")
@@ -203,6 +212,7 @@ class ItemGroup(QWidget):
 
         self.item_combobox_source.color_changed.connect(self.update_default_quantity)
 
+    # 
     def update_default_quantity(self, level):
         if level == 0 or level == 4:
             self.quantity_input.setValue(1)
@@ -251,9 +261,12 @@ class MiddleWidget(ScrollableWidget):
         self.add_widget_to_scroll(self.create_item_group())
 
     def update_item_options(self, item, level):
-        for group in self.item_groups:
-            group.item_combobox_source.update_option(item, level)
-            group.item_combobox_target.update_option(item, level)
+        try:
+            for group in self.item_groups:
+                group.item_combobox_source.update_option(item, level)
+                group.item_combobox_target.update_option(item, level)
+        except Exception as e:
+            logging.exception(e)
 
 
 class Route(QWidget):
@@ -291,6 +304,7 @@ class Route(QWidget):
         layout.addWidget(QLabel(f": {num}"))
         self.setLayout(layout)
 
+    # 
     def on_checkbox_changed(self, state):
         self.stock.switch_stock(False)
 
@@ -312,6 +326,7 @@ class RouteViewWidget(ScrollableWidget):
         self.route_list = []
         self.group_list = []
 
+    # 
     def update_routes(self, routes):
         self.clean_view()
 
@@ -335,6 +350,7 @@ class RouteViewWidget(ScrollableWidget):
                 self.add_widget_to_scroll(group)
                 self.route_list.append(route)
 
+    # 
     def clean_view(self):
         for group in self.group_list:
             if group is not None:
@@ -361,13 +377,17 @@ class StockWidget(ScrollableWidget):
         self.button_modify = QPushButton(self.modify_count_text)
         self.build_item_grid()
 
+    #
     def update_items(self, item_list):
         for key in item_list:
+            if not self.item_counts.get(key):
+                continue
             self.item_counts[key].setText(f'{self.stock[key]}')
             self.item_spin_boxes[key][0].setValue(self.stock[key])
 
     def build_item_grid(self):
-        for level, item_list in trade_items.items():
+        self.stock.switch_stock(False)
+        for level, item_list in self.stock.trade_items.items():
             if not isinstance(level, int):
                 continue
 
@@ -422,6 +442,7 @@ class StockWidget(ScrollableWidget):
         self.button_modify.clicked.connect(self.on_modify_button_clicked)
         self.add_widget_to_scroll(self.button_modify)
 
+    # 
     def on_modify_button_clicked(self):
         if self.button_modify.text() == self.modify_count_text:
             self.show_spin_boxes()
@@ -431,13 +452,16 @@ class StockWidget(ScrollableWidget):
         self.confirm_count()
         self.button_modify.setText(self.modify_count_text)
 
+    # 
     def show_spin_boxes(self):
         for key, spins in self.item_spin_boxes.items():
             self.item_counts[key].hide()
             spins[0].show()
             spins[1].show()
 
+    # 
     def confirm_count(self):
+        self.stock.switch_stock(False)
         self.button_modify.setText(self.modify_count_text)
         for item_name, (input_field, stock_quantity_input) in self.item_spin_boxes.items():
             self.stock[item_name] = input_field.value()
@@ -454,36 +478,40 @@ class MainWindow(QWidget):
     def __init__(self, island_graph, stock):
         super(MainWindow, self).__init__()
 
-        self.stock = stock
-        self.island_graph = island_graph
-        self.islands = list(island_graph.island_group_map.keys())
-        self.exchange_graph = ExchangeGraph('A', 11500, self.stock, self.island_graph)
+        try:
+            self.stock = stock
+            self.island_graph = island_graph
+            self.islands = sorted(list(island_graph.island_group_map.keys()))
+            self.exchange_graph = ExchangeGraph('伊利亞', 11500, self.stock, self.island_graph)
 
-        self.set_font()
+            self.set_font()
 
-        main_layout = QHBoxLayout(self)
+            main_layout = QHBoxLayout(self)
 
-        self.top_view = TopWidget(self.stock)
-        self.submit_button = QPushButton("Submit")
-        self.middle_view = MiddleWidget(self.islands, self.stock)
-        self.route_view = RouteViewWidget(self.stock, self.stock_update_signal)
-        left_layout = self.add_left_area()
+            self.top_view = TopWidget(self.stock)
+            self.submit_button = QPushButton("Submit")
+            self.middle_view = MiddleWidget(self.islands, self.stock)
+            self.route_view = RouteViewWidget(self.stock, self.stock_update_signal)
+            left_layout = self.add_left_area()
 
-        self.stock_view = StockWidget(self.stock)
-        right_layout = self.add_stock_view()
+            self.stock_view = StockWidget(self.stock)
+            right_layout = self.add_stock_view()
 
-        main_layout.addLayout(left_layout, 1)
-        main_layout.addLayout(right_layout, 2)
+            main_layout.addLayout(left_layout, 1)
+            main_layout.addLayout(right_layout, 2)
 
-        self.setWindowTitle("Island Trade")
-        self.resize(1700, 900)
+            self.setWindowTitle("Island Trade")
+            self.resize(1700, 900)
 
-        self.submit_button.clicked.connect(self.run_schedule)
+            self.submit_button.clicked.connect(self.run_schedule)
 
-        self.submit_button_signal.connect(self.route_view.update_routes)
-        self.stock_update_signal.connect(self.stock_view.update_items)
-        self.top_view.add_item_signal.connect(self.middle_view.update_item_options)
+            self.submit_button_signal.connect(self.route_view.update_routes)
+            self.stock_update_signal.connect(self.stock_view.update_items)
+            self.top_view.add_item_signal.connect(self.middle_view.update_item_options)
+        except Exception as e:
+            logging.exception(e)
 
+    # 
     def add_left_area(self):
         left_layout = QVBoxLayout(self)
         self.setLayout(left_layout)
@@ -496,6 +524,7 @@ class MainWindow(QWidget):
         left_layout.addWidget(self.route_view, 2)
         return left_layout
 
+    # 
     def add_stock_view(self):
         right_layout = QVBoxLayout(self)
         right_layout.addWidget(self.stock_view)
@@ -505,8 +534,8 @@ class MainWindow(QWidget):
         font = QFont("Microsoft JhengHei", 12)
         QApplication.setFont(font)
 
+    # 
     def run_schedule(self):
-        print('run_schedule')
         exchanges = {}
         for group in self.middle_view.item_groups:
             island = group.island_combobox.currentText()
@@ -525,3 +554,11 @@ class MainWindow(QWidget):
         self.stock.save()
         a0.accept()
 
+# 算交涉力
+# 接 auto sell
+# 接收入
+# 檢查演算法
+# 記錄歷史 exchange+island
+# 看要不要加stock不足排除路線
+# UI 醜死了
+# 存 json

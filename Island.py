@@ -1,4 +1,6 @@
 import heapq
+import json
+import logging
 import math
 import os
 import pickle
@@ -21,35 +23,65 @@ T = TypeVar('T', bound='Save')
 
 class Save:
     def __init__(self):
-        pass
+        self.folder = 'storage'
+        os.makedirs(self.folder, exist_ok=True)
 
-    def save(self):
-        with open(f'{self.__class__.__name__}.pkl', 'wb') as f:
-            pickle.dump(self, f)
+        storage_object = self.read()
+        self.__dict__.update(storage_object)
 
-    @classmethod
-    def read(cls) -> Optional[T]:
-        filename = f'{cls.__name__}.pkl'
-        if not os.path.exists(filename):
-            return
-        with open(filename, 'rb') as f:
-            return pickle.load(f)
+    def save_json(self, filename, data):
+        with open(f'{self.folder}/{filename}.json', 'w') as f:
+            json.dump(data, f)
+
+    def read_json(self, filename):
+        with open(f'{self.folder}/{filename}', 'r') as f:
+            return json.load(f)
+
+    def save(self, *args):
+        for target_name in args:
+            target = self.__dict__.get(target_name)
+            if not target:
+                continue
+
+            self.save_json(f'{self.__class__.__name__}_{target_name}', target)
+
+    def read(self):
+        prefix = f'{self.__class__.__name__}'
+        files = [f for f in os.listdir(self.folder) if f.startswith(prefix) and f.endswith('.json')]
+
+        storage_object = {}
+        for filename in files:
+            data = self.read_json(filename)
+            target_name = filename.replace(f'{prefix}_', '').replace('.json', '')
+            storage_object[target_name] = data
+        return storage_object
 
 
 class IslandGraph(Save):
     def __init__(self):
         super().__init__()
-        self.graph = {}
-        self.group_graph = {}
-        self.island_group_map = {}
-        self.group_island_map = defaultdict(list)
         self.island_positions = island_position.copy()
 
-        self.create_graph_from_positions(self.graph, self.island_positions)
-        self.cluster_islands(draw=True)
+        if not self.__dict__.get('graph'):
+            self.graph = {}
+            self.create_graph_from_positions(self.graph, self.island_positions)
 
-        self.group_position = self.calculate_group_centroids()
-        self.create_graph_from_positions(self.group_graph, self.group_position, 12, draw=True)
+        if not self.__dict__.get('group_graph'):
+            self.group_graph = {}
+
+        if not self.__dict__.get('island_group_map'):
+            self.island_group_map = {}
+
+        if not self.__dict__.get('group_island_map'):
+            self.group_island_map = {}
+
+        if not self.__dict__.get('group_position'):
+            self.cluster_islands(draw=True)
+
+            self.group_position = self.calculate_group_centroids()
+
+            self.group_position = self.calculate_group_centroids()
+            self.create_graph_from_positions(self.group_graph, self.group_position, 20, draw=True)
 
         self.save()
 
@@ -81,11 +113,11 @@ class IslandGraph(Save):
     def add_edge(u, v, weight, graph_map):
         if u not in graph_map:
             graph_map[u] = []
-        graph_map[u].append((v, weight))
+        graph_map[u].append((v, float(weight)))
 
         if v not in graph_map:
             graph_map[v] = []
-        graph_map[v].append((u, weight))
+        graph_map[v].append((u, float(weight)))
 
     @staticmethod
     def draw_graph(graph_map, position_map):
@@ -201,6 +233,15 @@ class IslandGraph(Save):
         pass_islands.remove(end)
         return pass_islands
 
+    def save(self):
+        super().save(
+            'graph',
+            'group_graph',
+            'island_group_map',
+            'group_island_map',
+            'group_position',
+        )
+
 
 class Exchange:
     def __init__(self, island, source, target, ratio, swap_cost=11485, trades=None, level=None, weight=0):
@@ -227,17 +268,28 @@ class Exchange:
 
 
 class Stock(Save):
-    def __init__(self, stock=None):
+    def __init__(self):
         super().__init__()
-        if stock is None:
-            stock = {}
 
-        self.trade_items = trade_items
+        if not self.__dict__.get('trade_items'):
+            self.trade_items = trade_items
+        else:
+            int_trade_items = {}
+            for level, items in self.trade_items.items():
+                try:
+                    level = int(level)
+                except:
+                    pass
+
+                int_trade_items[level] = items
+            self.trade_items = int_trade_items
 
         all_items = [item['name'] for items in self.trade_items.values() for item in items]
 
-        self._stock = stock.copy()
-        unset_items = set(all_items) - set(stock.keys())
+        if not self.__dict__.get('_stock'):
+            self._stock = {}
+
+        unset_items = set(all_items) - set(self._stock.keys())
         self._stock.update({item: 0 for item in unset_items})
         self._calc_stock = self._stock.copy()
         self.stock = self._calc_stock
@@ -271,19 +323,19 @@ class Stock(Save):
 
     def update_trade_items(self, level, item):
         self.trade_items[level].append({'name': item})
+        self.item_level = self.update_item_level()
+        self.item_weight = self.update_item_weight()
 
-    @staticmethod
-    def update_item_level():
+    def update_item_level(self):
         item_level = {}
-        for level, items in trade_items.items():
+        for level, items in self.trade_items.items():
             for item in items:
                 item_level[item['name']] = level
         return item_level
 
-    @staticmethod
-    def update_item_weight():
+    def update_item_weight(self):
         item_weight = {}
-        for level, items in trade_items.items():
+        for level, items in self.trade_items.items():
             for item in items:
                 weight = 100
                 if level == 2:
@@ -295,9 +347,16 @@ class Stock(Save):
                 item_weight[item['name']] = weight
         return item_weight
 
+    def save(self):
+        super().save(
+            'trade_items',
+            '_stock',
+        )
 
-class ExchangeGraph:
+
+class ExchangeGraph(Save):
     def __init__(self, start_island, ship_load_capacity, stock: Stock, island_graph: IslandGraph):
+        super().__init__()
         self.graph = {}
         self.ship_load_capacity = ship_load_capacity
         self.stock = stock
@@ -306,9 +365,10 @@ class ExchangeGraph:
 
     def add_trade(self, exchanges: dict):
         for island, args in exchanges.items():
-            level = self.stock.item_level.get([args[1]])
-            weight = self.stock.item_weight.get([args[1]])
+            level = self.stock.item_level.get(args[1])
+            weight = self.stock.item_weight.get(args[1])
             self.graph[island] = Exchange(island, *args, level, weight)
+        self.save('graph')
 
     def count_max_allowable_exchange(self, exchange: Exchange):
         if exchange.level == 1:
@@ -333,8 +393,6 @@ class ExchangeGraph:
 
     def find_unfulfilled_exchange(self):
         sorted_graph = dict(sorted(self.graph.items(), key=lambda x: x[1].level))
-        # for k, v in sorted_graph.items():
-        #     print('sorted_graph', k, v.source)
 
         unfulfilled = {}
         target_numbers = {}
@@ -356,15 +414,11 @@ class ExchangeGraph:
         return unfulfilled
 
     def pick_island(self, overlap):
-        # print('pick_island')
         selections = []
 
         sorted_overlap = dict(sorted(overlap.items(), key=lambda x: len(x[1])))
 
-        # print('sorted_overlap', sorted_overlap)
-
         def pick(index):
-            print('keys', list(sorted_overlap.keys()))
             first_keys = list(sorted_overlap.keys())
             if len(first_keys) <= 0:
                 return {}
@@ -378,10 +432,7 @@ class ExchangeGraph:
             target_overlap.pop(first_key)
             selections.append(first_island)
 
-            # print('first_island', first_island)
             for island, island_list in target_overlap.items():
-                # print(island, island_list)
-
                 for i, nearby_island in enumerate(island_list):
                     if nearby_island in selections:
                         continue
@@ -391,13 +442,11 @@ class ExchangeGraph:
         max_count = 50
         index = 0
         pick(index)
-        # print('selections1', selections)
         while len(selections) != len(overlap) and index < max_count:
             selections = []
             index += 1
             pick(index)
 
-        # print('selections2', selections)
         return {selections[i]: k for i, k in enumerate(sorted_overlap.keys())}
 
     def get_exchange_weight(self, exchange: Exchange, trades=None):
@@ -526,7 +575,7 @@ class ExchangeGraph:
         try:
             find_routes(0, sorted_graph)
         except Exception as e:
-            print(e)
+            logging.exception(e)
 
         return routes
 
