@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import QThread, pyqtSignal
 
-from Island import ExchangeGraph, Stock
+from Exchange import ExchangeGraph
 
 
 class Worker(QThread):
@@ -482,7 +482,7 @@ class MainWindow(QWidget):
             self.stock = stock
             self.island_graph = island_graph
             self.islands = sorted(list(island_graph.island_group_map.keys()))
-            self.exchange_graph = ExchangeGraph('伊利亞', 11500, self.stock, self.island_graph)
+            self.exchange_graph = ExchangeGraph('伊利亞', 10891, self.stock, self.island_graph)
 
             self.set_font()
 
