@@ -54,7 +54,7 @@ class ExchangeGraph(Save):
                 if _version > version:
                     version = _version
 
-            self.save_json(filename.format(version), target)
+            self.save_json(filename.format(version+1), target)
 
     def count_max_allowable_exchange(self, exchange: Exchange):
         if exchange.level == 1:
