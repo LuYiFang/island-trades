@@ -123,6 +123,7 @@ class TopWidget(QWidget):
 
         self.stock.update_trade_items(level, self.item_input.text())
         self.add_item_signal.emit(self.item_input.text(), level)
+        self.item_input.setText('')
 
 
 class ColorComboBox(QComboBox):
@@ -450,15 +451,10 @@ class MainWindow(QWidget):
     submit_button_signal = QtCore.pyqtSignal(dict)
     stock_update_signal = QtCore.pyqtSignal(list)
 
-    def __init__(self, island_graph):
+    def __init__(self, island_graph, stock):
         super(MainWindow, self).__init__()
 
-        self.stock = Stock({
-            '蓮花': 3,
-            '豌豆': 5,
-            '櫻花': 2,
-        })
-
+        self.stock = stock
         self.island_graph = island_graph
         self.islands = list(island_graph.island_group_map.keys())
         self.exchange_graph = ExchangeGraph('A', 11500, self.stock, self.island_graph)
@@ -524,3 +520,8 @@ class MainWindow(QWidget):
         self.worker = Worker(exchanges, self.exchange_graph)
         self.worker.finished.connect(self.submit_button_signal.emit)
         self.worker.start()
+
+    def closeEvent(self, a0):
+        self.stock.save()
+        a0.accept()
+

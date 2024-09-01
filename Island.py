@@ -9,8 +9,12 @@ from typing import TypeVar, Optional
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 
-from exchange_items import trade_items
+from exchange_items import trade_items, island_position
+
+import networkx as nx
+import matplotlib.pyplot as plt
 
 T = TypeVar('T', bound='Save')
 
@@ -39,17 +43,65 @@ class IslandGraph(Save):
         self.group_graph = {}
         self.island_group_map = {}
         self.group_island_map = defaultdict(list)
+        self.island_positions = island_position.copy()
 
-    def add_edge(self, u, v, weight, group=False):
-        graph = self.group_graph if group else self.graph
+        self.create_graph_from_positions(self.graph, self.island_positions)
+        self.cluster_islands(draw=True)
 
-        if u not in graph:
-            graph[u] = []
-        graph[u].append((v, weight))
+        self.group_position = self.calculate_group_centroids()
+        self.create_graph_from_positions(self.group_graph, self.group_position, 12, draw=True)
 
-        if v not in graph:
-            graph[v] = []
-        graph[v].append((u, weight))
+        self.save()
+
+    def add_island(self, island, x, y):
+        self.island_positions[island] = (x, y)
+        if island not in self.graph:
+            self.graph[island] = []
+
+    @staticmethod
+    def calculate_distance(island1, island2, position_map):
+        x1, y1 = position_map[island1]
+        x2, y2 = position_map[island2]
+        return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+    def create_graph_from_positions(self, graph_map, position_map, max_distance=9, draw=False):
+        islands = list(position_map.keys())
+        for i, island1 in enumerate(islands):
+            for j, island2 in enumerate(islands):
+                if i == j:
+                    continue
+                distance = self.calculate_distance(island1, island2, position_map)
+                if distance <= max_distance:
+                    self.add_edge(island1, island2, distance, graph_map)
+
+        if draw:
+            self.draw_graph(graph_map, position_map)
+
+    @staticmethod
+    def add_edge(u, v, weight, graph_map):
+        if u not in graph_map:
+            graph_map[u] = []
+        graph_map[u].append((v, weight))
+
+        if v not in graph_map:
+            graph_map[v] = []
+        graph_map[v].append((u, weight))
+
+    @staticmethod
+    def draw_graph(graph_map, position_map):
+
+        nx_graph = nx.Graph()
+
+        for island, neighbors in graph_map.items():
+            for neighbor in neighbors:
+                nx_graph.add_edge(island, neighbor[0], weight=neighbor[1])
+
+        plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']
+        plt.rcParams['axes.unicode_minus'] = False
+
+        nx.draw(nx_graph, position_map, with_labels=True, node_size=500, node_color="skyblue", font_size=10,
+                font_color="black", font_weight="bold", edge_color="gray")
+        plt.show()
 
     def nearby_islands(self, island, max_distance):
         nearby = []
@@ -58,60 +110,48 @@ class IslandGraph(Save):
                 nearby.append(neighbor)
         return nearby
 
-    def cluster_islands(self, num_clusters):
-        islands = sorted(list(self.graph.keys()))
-        n = len(islands)
-        distance_matrix = np.full((n, n), 100)
+    def cluster_islands(self, num_clusters=15, draw=False):
+        islands = list(self.island_positions.keys())
+        coordinates = np.array(list(self.island_positions.values()))
+        scaler = StandardScaler()
+        scaled_coordinates = scaler.fit_transform(coordinates)
 
-        for index in range(len(islands)):
-            distance_matrix[index][index] = 0
+        k_means = KMeans(n_clusters=num_clusters).fit(scaled_coordinates)
+        labels = k_means.labels_
 
-        for u_index, u in enumerate(islands):
-            for v, weight in self.graph[u]:
-                v_index = islands.index(v)
-                distance_matrix[u_index][v_index] = weight
-
-        # print(pd.DataFrame(distance_matrix,  index=islands, columns=islands))
-
-        k_means = KMeans(n_clusters=num_clusters).fit(distance_matrix)
+        if draw:
+            self.draw_clustering(labels, coordinates, islands)
 
         group = defaultdict(list)
-        for i, label in enumerate(k_means.labels_):
+        for i, label in enumerate(labels):
             group[f'group_{label}'].append(islands[i])
             self.island_group_map[islands[i]] = f'group_{label}'
         self.group_island_map = group
 
-        self.create_group_graph(group, islands, distance_matrix)
-        pprint(group)
-        return group
+    @staticmethod
+    def draw_clustering(labels, coordinates, islands):
+        colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'indigo']
+        for i, label in enumerate(labels):
+            plt.scatter(coordinates[i][0], coordinates[i][1], color=colors[label % len(colors)])
+            plt.text(float(coordinates[i][0]), float(coordinates[i][1]), islands[i], fontsize=12)
 
-    def create_group_graph(self, group, islands, distance_matrix):
-        island_map = {island: i for i, island in enumerate(islands)}
+        plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']
+        plt.rcParams['axes.unicode_minus'] = False
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title('Island Clusters')
+        plt.legend()
+        plt.show()
 
-        def get_edge_weight(u, v):
-            u_index = island_map[u]
-            v_index = island_map[v]
-            return distance_matrix[u_index][v_index]
-
-        counted_group_pair = []
-        for group_name_i, island_list_i in group.items():
-            for group_name_j, island_list_j in group.items():
-                if group_name_i == group_name_j:
-                    continue
-
-                pair_set = {group_name_i, group_name_j}
-                if pair_set in counted_group_pair:
-                    continue
-
-                counted_group_pair.append(pair_set)
-
-                min_distance = float('inf')
-                for island_i in island_list_i:
-                    for island_j in island_list_j:
-                        weight = get_edge_weight(island_i, island_j)
-                        if min_distance > weight:
-                            min_distance = weight
-                self.add_edge(group_name_i, group_name_j, min_distance, True)
+    def calculate_group_centroids(self):
+        group_centroids = {}
+        for group, islands in self.group_island_map.items():
+            x_coords = [self.island_positions[island][0] for island in islands]
+            y_coords = [self.island_positions[island][1] for island in islands]
+            centroid_x = sum(x_coords) / len(x_coords)
+            centroid_y = sum(y_coords) / len(y_coords)
+            group_centroids[group] = (centroid_x, centroid_y)
+        return group_centroids
 
     def find_passed_group(self, start, end):
         start_group = self.island_group_map[start]
@@ -187,12 +227,12 @@ class Exchange:
 
 
 class Stock(Save):
-    trade_items = trade_items
-
     def __init__(self, stock=None):
         super().__init__()
         if stock is None:
             stock = {}
+
+        self.trade_items = trade_items
 
         all_items = [item['name'] for items in self.trade_items.values() for item in items]
 
@@ -373,7 +413,8 @@ class ExchangeGraph:
         self.stock.restore()
         self.stock.switch_stock(True)
 
-        sorted_graph = dict(sorted(self.graph.items(), key=lambda x: self.get_exchange_weight(x[1]), reverse=True))
+        graph_filter = filter(lambda x: x[1].ratio != 0, self.graph.items())
+        sorted_graph = dict(sorted(graph_filter, key=lambda x: self.get_exchange_weight(x[1]), reverse=True))
         routes = defaultdict(dict)
 
         def find_routes(index, graph):
@@ -492,4 +533,3 @@ class ExchangeGraph:
     def tune(self):
         pass
         # tune 最佳解 => 路程最少
-
