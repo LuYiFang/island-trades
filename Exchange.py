@@ -11,14 +11,15 @@ from utility import Save, Exchange
 
 
 class ExchangeGraph(Save):
-    def __init__(self, start_island, ship_load_capacity, stock: Stock, island_graph: IslandGraph):
+    def __init__(self, ship_load_capacity, stock: Stock, island_graph: IslandGraph):
         super().__init__()
 
         self.graph = {}
+        self.save_graph = {}
         self.ship_load_capacity = ship_load_capacity
         self.stock = stock
         self.island_graph = island_graph
-        self.start_island = start_island
+        self.start_island = island_graph.start_island
 
     def add_trade(self, exchanges: dict):
         self.save_graph = {}
@@ -32,7 +33,21 @@ class ExchangeGraph(Save):
                 'target': args[1],
                 'ratio': args[2],
             }
-        self.save('save_graph')
+        self.count_priority()
+
+    @staticmethod
+    def scale_to_range(value, original_min, original_max, new_min=1, new_max=10):
+        if original_min == original_max:
+            return new_min
+        return new_min + (value - original_min) / (original_max - original_min) * (new_max - new_min)
+
+    def count_priority(self):
+        for island, exchange in self.graph.items():
+            stock_min = min(self.stock.stock.values())
+            stock_max = max(self.stock.stock.values())
+
+            exchange.priority += self.scale_to_range(- self.stock[exchange.target], -stock_min, -stock_max)
+            exchange.priority += self.scale_to_range(exchange.price, 2000000, 7500000)
 
     def save(self, *args):
 
@@ -54,7 +69,7 @@ class ExchangeGraph(Save):
                 if _version > version:
                     version = _version
 
-            self.save_json(filename.format(version+1), target)
+            self.save_json(filename.format(version + 1), target)
 
     def count_max_allowable_exchange(self, exchange: Exchange):
         if exchange.level == 1:
@@ -73,68 +88,6 @@ class ExchangeGraph(Save):
     def count_min_weight(self, exchange: Exchange):
         return exchange.weight * exchange.ratio
 
-    def find_available_exchange(self, target):
-        # 從附近 or 會路過的島找
-        self.island_graph.nearby_islands(target, 2)
-
-    def find_unfulfilled_exchange(self):
-        sorted_graph = dict(sorted(self.graph.items(), key=lambda x: x[1].level))
-
-        unfulfilled = {}
-        target_numbers = {}
-        for island, exchange in sorted_graph.items():
-            if exchange.level == 1:
-                target_numbers[exchange.target] = 10
-                continue
-
-            max_allowable_trades = self.count_max_allowable_exchange(exchange)
-            target_numbers[exchange.target] = max_allowable_trades * exchange.ratio + self.stock[exchange.target]
-
-            if self.stock[exchange.source] >= max_allowable_trades:
-                continue
-
-            if target_numbers.get(exchange.source, 0) >= max_allowable_trades:
-                continue
-
-            unfulfilled[island] = exchange
-        return unfulfilled
-
-    def pick_island(self, overlap):
-        selections = []
-
-        sorted_overlap = dict(sorted(overlap.items(), key=lambda x: len(x[1])))
-
-        def pick(index):
-            first_keys = list(sorted_overlap.keys())
-            if len(first_keys) <= 0:
-                return {}
-            first_key = first_keys[0]
-            first_list = sorted_overlap[first_key]
-            if index >= len(first_list):
-                return {}
-
-            first_island = first_list[index]
-            target_overlap = sorted_overlap.copy()
-            target_overlap.pop(first_key)
-            selections.append(first_island)
-
-            for island, island_list in target_overlap.items():
-                for i, nearby_island in enumerate(island_list):
-                    if nearby_island in selections:
-                        continue
-                    selections.append(nearby_island)
-                    break
-
-        max_count = 50
-        index = 0
-        pick(index)
-        while len(selections) != len(overlap) and index < max_count:
-            selections = []
-            index += 1
-            pick(index)
-
-        return {selections[i]: k for i, k in enumerate(sorted_overlap.keys())}
-
     def get_exchange_weight(self, exchange: Exchange, trades=None):
         if exchange.level == 1:
             return 1000
@@ -148,8 +101,73 @@ class ExchangeGraph(Save):
         self.stock.restore()
         self.stock.switch_stock(True)
 
+        #  優先條件: 要囤貨 > 數量較少 > 高價值
+
+        def dp(state, visited, island_trades):
+            current_island, current_weight, current_swap_cost, current_priority = state
+
+            if current_weight > self.ship_load_capacity or current_swap_cost <= 0:
+                return current_priority, visited, island_trades
+
+            if len(self.graph) == len(visited):
+                return current_priority, visited, island_trades
+
+            max_value = -float('inf')
+            best_route = set()
+            best_island_trades = {}
+            all_exchange_zero = True
+
+            for exchange in self.graph.values():
+                if exchange.island in visited:
+                    continue
+
+                if not self.island_graph.is_island_valid(exchange.island, visited):
+                    continue
+
+                max_allowable_trades = exchange.count_max_allowable_trades(self.ship_load_capacity - current_weight,
+                                                                           self.stock[exchange.source],
+                                                                           current_swap_cost)
+
+                if max_allowable_trades <= 0:
+                    continue
+
+                if current_weight + (max_allowable_trades * exchange.ratio * exchange.weight) > self.ship_load_capacity:
+                    continue
+
+                all_exchange_zero = False
+                new_state = (
+                    exchange.island,
+                    current_weight + (max_allowable_trades * exchange.ratio * exchange.weight),
+                    current_swap_cost - max_allowable_trades * exchange.swap_cost,
+                    exchange.priority + current_priority,
+                )
+                island_trades[exchange.island] = max_allowable_trades
+                value, route, route_trades = dp(new_state, visited | {exchange.island}, island_trades.copy())
+
+                if value > max_value:
+                    max_value = value
+                    best_route = route
+                    best_island_trades = route_trades
+
+            if all_exchange_zero:
+                return current_priority, visited, island_trades
+
+            return max_value, best_route, best_island_trades
+
+        first_island = list(self.graph.keys())[0]
+        v, r, t = dp((
+            first_island,
+            0,
+            1000000,
+            self.graph[first_island].priority,
+        ),
+            set(),
+            {}
+        )
+
         graph_filter = filter(lambda x: x[1].ratio != 0, self.graph.items())
-        sorted_graph = dict(sorted(graph_filter, key=lambda x: self.get_exchange_weight(x[1]), reverse=True))
+        sorted_graph = dict(
+            sorted(graph_filter, key=lambda x: (x[1].priority, self.get_exchange_weight(x[1])), reverse=True))
         routes = defaultdict(dict)
 
         def find_routes(index, graph):
@@ -255,7 +273,5 @@ class ExchangeGraph(Save):
         except Exception as e:
             logging.exception(e)
 
+        find_routes(0, sorted_graph)
         return routes
-
-    def tune(self):
-        pass

@@ -1,20 +1,13 @@
 import functools
 import json
 import logging
+import math
 import os
 
 
-def exception_handler(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            print('args', args)
-            print('kwargs', kwargs)
-            # args.pop()
-            return func(*args[1:], **kwargs)
-        except Exception as e:
-            logging.exception(e)
-    return wrapper
+def read_json(filename):
+    with open(filename, 'r') as f:
+        return json.load(f)
 
 
 class Save:
@@ -30,8 +23,7 @@ class Save:
             json.dump(data, f)
 
     def read_json(self, filename):
-        with open(f'{self.folder}/{filename}', 'r') as f:
-            return json.load(f)
+        return read_json(f'{self.folder}/{filename}')
 
     def save(self, *args):
         for target_name in args:
@@ -72,7 +64,29 @@ class Exchange:
         self.trades = trades if trades else self.maximum_exchange
         self.remain_exchange = self.init_remain_exchange()
 
+        self.price = self.get_price()
+
     def init_remain_exchange(self):
         if self.trades > self.maximum_exchange:
             return self.maximum_exchange
         return self.trades
+
+    def get_price(self):
+        if self.level == 5:
+            return 7500000
+        if self.level == 4:
+            return 5000000
+        if self.level == 3:
+            return 4000000
+        if self.level == 2:
+            return 3000000
+        if self.level == 1:
+            return 2000000
+
+    def count_max_allowable_trades(self, load_capacity, stock_count, current_swap_cost):
+        if self.level == 1:
+            stock_count = 1000
+        max_trades = math.floor(math.floor(load_capacity / self.weight) / self.ratio)
+        return min(self.trades, self.maximum_exchange, max_trades, stock_count,
+                   self.remain_exchange, math.floor(current_swap_cost / self.swap_cost))
+

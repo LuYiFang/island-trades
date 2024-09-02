@@ -17,8 +17,9 @@ T = TypeVar('T', bound='Save')
 
 
 class IslandGraph(Save):
-    def __init__(self):
+    def __init__(self, start_island):
         super().__init__()
+        self.start_island = start_island
         self.island_positions = island_position.copy()
 
         if not self.__dict__.get('graph'):
@@ -100,6 +101,9 @@ class IslandGraph(Save):
             if weight <= max_distance:
                 nearby.append(neighbor)
         return nearby
+
+    def is_nearby(self, island, neighbor, max_distance=6):
+        return self.calculate_distance(island, neighbor, self.island_positions) <= max_distance
 
     def cluster_islands(self, num_clusters=15, draw=False):
         islands = list(self.island_positions.keys())
@@ -191,6 +195,35 @@ class IslandGraph(Save):
             pass_islands.extend(self.group_island_map[group])
         pass_islands.remove(end)
         return pass_islands
+
+    def is_passed_by(self, current_island, visited_islands):
+        max_distance = -float('inf')
+        farthest_island = self.start_island
+        for visited_island in visited_islands:
+            dist = self.calculate_distance(self.start_island, visited_island, self.island_positions)
+            if max_distance < dist:
+                max_distance = dist
+                farthest_island = visited_island
+        passed_islands = self.find_passed_islands(self.start_island, farthest_island)
+        if current_island in passed_islands:
+            return True
+
+        passed_islands = self.find_passed_islands(self.start_island, current_island)
+        for visited_island in visited_islands:
+            if visited_island not in passed_islands:
+                return False
+        return True
+
+    def is_island_valid(self, current_island, visited_islands):
+
+        if not visited_islands:
+            return True
+
+        for visited_island in visited_islands:
+            if self.is_nearby(current_island, visited_island):
+                return True
+
+        return self.is_passed_by(current_island, visited_islands)
 
     def save(self):
         super().save(

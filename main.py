@@ -6,7 +6,7 @@ from Stock import Stock
 from UI import MainWindow
 
 if __name__ == '__main__':
-    island_graph = IslandGraph()
+    island_graph = IslandGraph('伊利亞')
     stock = Stock()
 
     app = QApplication(sys.argv)
