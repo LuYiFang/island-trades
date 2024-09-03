@@ -564,7 +564,6 @@ class MainWindow(QWidget):
         font = QFont("Microsoft JhengHei", 12)
         QApplication.setFont(font)
 
-    # 
     def save_exchange(self):
         self.exchange_graph.save('save_graph')
 

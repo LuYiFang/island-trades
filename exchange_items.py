@@ -120,3 +120,5 @@ island_position = {
     '赫爾馬': (26, 3),
     '卡修麻': (27, 5),
 }
+
+default_ship_load_capacity = 20000

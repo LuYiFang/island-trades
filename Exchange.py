@@ -7,16 +7,17 @@ from datetime import datetime
 
 from Island import IslandGraph
 from Stock import Stock
+from exchange_items import default_ship_load_capacity
 from utility import Save, Exchange
 
 
 class ExchangeGraph(Save):
-    def __init__(self, ship_load_capacity, stock: Stock, island_graph: IslandGraph):
+    def __init__(self, stock: Stock, island_graph: IslandGraph):
         super().__init__()
 
         self.graph = {}
         self.save_graph = {}
-        self.ship_load_capacity = ship_load_capacity
+        self.ship_load_capacity = default_ship_load_capacity
         self.stock = stock
         self.island_graph = island_graph
         self.start_island = island_graph.start_island
@@ -106,15 +107,16 @@ class ExchangeGraph(Save):
         def dp(state, visited, island_trades):
             current_island, current_weight, current_swap_cost, current_priority = state
 
-            if current_weight > self.ship_load_capacity or current_swap_cost <= 0:
-                return current_priority, visited, island_trades
+            if current_weight > self.ship_load_capacity - 100 or current_swap_cost <= 0:
+                return current_priority, visited, island_trades, current_swap_cost
 
             if len(self.graph) == len(visited):
-                return current_priority, visited, island_trades
+                return current_priority, visited, island_trades, current_swap_cost
 
             max_value = -float('inf')
             best_route = set()
             best_island_trades = {}
+            best_remain_swap_cost = 0
             all_exchange_zero = True
 
             for exchange in self.graph.values():
@@ -131,147 +133,77 @@ class ExchangeGraph(Save):
                 if max_allowable_trades <= 0:
                     continue
 
-                if current_weight + (max_allowable_trades * exchange.ratio * exchange.weight) > self.ship_load_capacity:
+                if current_weight + (
+                        max_allowable_trades * exchange.ratio * exchange.weight) > self.ship_load_capacity:
                     continue
 
                 all_exchange_zero = False
                 new_state = (
                     exchange.island,
                     current_weight + (max_allowable_trades * exchange.ratio * exchange.weight),
-                    current_swap_cost - max_allowable_trades * exchange.swap_cost,
+                    current_swap_cost - (max_allowable_trades * exchange.swap_cost),
                     exchange.priority + current_priority,
                 )
                 island_trades[exchange.island] = max_allowable_trades
-                value, route, route_trades = dp(new_state, visited | {exchange.island}, island_trades.copy())
+                value, route, route_trades, remain_swap_cost = dp(new_state, visited | {exchange.island},
+                                                                  island_trades.copy())
 
                 if value > max_value:
                     max_value = value
                     best_route = route
                     best_island_trades = route_trades
+                    best_remain_swap_cost = remain_swap_cost
 
             if all_exchange_zero:
-                return current_priority, visited, island_trades
+                return current_priority, visited, island_trades, current_swap_cost
 
-            return max_value, best_route, best_island_trades
+            return max_value, best_route, best_island_trades, best_remain_swap_cost
+
+        total_swap_cost = 1000000
+        min_swap_cost = 11280
+        best_routes = []
+
+        def find_best_routes(island, swap_cost):
+            if swap_cost < min_swap_cost:
+                return
+            _, route, island_trades, remain_swap_cost = dp((
+                island,
+                0,
+                swap_cost,
+                self.graph[island].priority,
+            ),
+                set(),
+                {}
+            )
+
+            if not route:
+                print('no route', island, self.graph[island].remain_exchange, swap_cost)
+                return
+
+            route_exchanges = {}
+            for _island in sorted(route, key=lambda x: self.island_graph.calculate_distance_with_start_island(x)):
+                trades = island_trades[_island]
+                _exchange = self.graph[_island]
+                self.stock.execute_exchange(_exchange, trades)
+                _exchange.remain_exchange -= trades
+
+                route_exchanges[_island] = (_exchange, trades)
+            best_routes.append(route_exchanges)
+
+            tradable_islands = list(filter(lambda x: x[1].remain_exchange > 0, self.graph.items()))
+            if len(tradable_islands) <= 0:
+                return
+
+            find_best_routes(tradable_islands[0][0], remain_swap_cost)
+            return
 
         first_island = list(self.graph.keys())[0]
-        v, r, t = dp((
-            first_island,
-            0,
-            1000000,
-            self.graph[first_island].priority,
-        ),
-            set(),
-            {}
-        )
+        find_best_routes(first_island, total_swap_cost)
 
-        graph_filter = filter(lambda x: x[1].ratio != 0, self.graph.items())
-        sorted_graph = dict(
-            sorted(graph_filter, key=lambda x: (x[1].priority, self.get_exchange_weight(x[1])), reverse=True))
-        routes = defaultdict(dict)
-
-        def find_routes(index, graph):
-            if not graph:
-                return
-
-            current_island = next(iter(graph))
-            current_exchange = graph[current_island]
-
-            remain_weight = self.ship_load_capacity
-
-            max_allowable_exchange = self.count_max_allowable_exchange(current_exchange)
-
-            if max_allowable_exchange <= 0:
-                return
-
-            if len(graph) <= 1:
-                routes[f'group_{index}'].update({
-                    current_island: {
-                        'source': current_exchange.source,
-                        'exchange': max_allowable_exchange,
-                        'target': current_exchange.target,
-                        'exchange_obj': current_exchange,
-                    }
-                })
-                return
-
-            self.stock.execute_exchange(current_exchange, max_allowable_exchange)
-            current_exchange.remain_exchange -= max_allowable_exchange
-            remain_weight -= max_allowable_exchange * current_exchange.ratio * current_exchange.weight
-
-            routes[f'group_{index}'].update({
-                current_island: {
-                    'source': current_exchange.source,
-                    'exchange': max_allowable_exchange,
-                    'target': current_exchange.target,
-                    'exchange_obj': current_exchange,
-                }
-            })
-
-            graph.pop(current_island)
-            if current_exchange.remain_exchange > 0:
-                graph[current_island] = current_exchange
-
-            if remain_weight <= 100:  # 負重最小值
-                find_routes(index + 1, graph)
-                return
-
-            nearby_islands = self.island_graph.nearby_islands(current_island, 2)
-            nearby_islands = set(graph.keys()).intersection(nearby_islands)
-            passed_islands = self.island_graph.find_passed_islands(self.start_island, current_island)
-            passed_islands = set(graph.keys()).intersection(passed_islands)
-            merge_islands = {*nearby_islands, *passed_islands}
-
-            merge_exchanges = {}
-            for merge_island in merge_islands:
-                if self.count_min_weight(graph[merge_island]) > remain_weight:
-                    continue
-                merge_exchanges[merge_island] = graph[merge_island]
-
-            merge_exchanges = dict(
-                sorted(merge_exchanges.items(), key=lambda x: self.count_min_weight(x[1]), reverse=True))
-
-            for merge_island, merge_exchange in merge_exchanges.items():
-                available_merge_trades = math.floor(
-                    math.floor(remain_weight / self.count_min_weight(merge_exchange)) / merge_exchange.ratio)
-
-                available_merge_trades = min(
-                    merge_exchange.trades,
-                    merge_exchange.maximum_exchange,
-                    available_merge_trades,
-                    self.stock[merge_exchange.source],
-                    merge_exchange.remain_exchange
-                )
-
-                if available_merge_trades <= 0:
-                    continue
-
-                self.stock.execute_exchange(merge_exchange, available_merge_trades)
-                remain_weight -= available_merge_trades * merge_exchange.ratio * merge_exchange.weight
-                merge_exchange.remain_exchange -= available_merge_trades
-
-                graph.pop(merge_island)
-                if merge_exchange.remain_exchange > 0:
-                    graph[merge_island] = merge_exchange
-
-                routes[f'group_{index}'].update({
-                    merge_island: {
-                        'source': merge_exchange.source,
-                        'exchange': available_merge_trades,
-                        'target': merge_exchange.target,
-                        'exchange_obj': merge_exchange,
-                    }
-                })
-
-                if remain_weight <= 0:
-                    break
-
-            find_routes(index + 1, graph)
-
-        try:
-            find_routes(0, sorted_graph)
-        except Exception as e:
-            logging.exception(e)
-
-        find_routes(0, sorted_graph)
-        return routes
+        print('best_routes')
+        for _route in best_routes:
+            print()
+            for i, v in _route.items():
+                print(i, v[1], v[0].swap_cost, end=' ')
+        print('best_routes end', type(best_routes))
+        return best_routes

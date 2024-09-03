@@ -33,6 +33,10 @@ class Stock(Save):
         self.item_level = self.update_item_level()
         self.item_weight = self.update_item_weight()
 
+        self.auto_sell = False
+        self.reserved_quantity = {item: 0 for item in all_items}
+        self.sell_quantity = {item: 0 for item in all_items}
+
     def __getitem__(self, item):
         return self.stock.get(item, 0)
 
@@ -45,11 +49,13 @@ class Stock(Save):
     def execute_exchange(self, exchange: Exchange, trades):
         if exchange.level != 1:
             self.stock[exchange.source] -= trades
+
         self.stock[exchange.target] += trades * exchange.ratio
 
     def undo_execute_exchange(self, exchange: Exchange, trades):
         if exchange.level != 1:
             self.stock[exchange.source] += trades
+
         self.stock[exchange.target] -= trades * exchange.ratio
 
     def restore(self):
@@ -81,6 +87,9 @@ class Stock(Save):
                     weight = 1000
                 item_weight[item['name']] = weight
         return item_weight
+
+    def switch_auto_sell(self, auto_sell):
+        self.auto_sell = auto_sell
 
     def save(self):
         super().save(

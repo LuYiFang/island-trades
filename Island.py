@@ -26,9 +26,6 @@ class IslandGraph(Save):
             self.graph = {}
             self.create_graph_from_positions(self.graph, self.island_positions)
 
-        if not self.__dict__.get('group_graph'):
-            self.group_graph = {}
-
         if not self.__dict__.get('island_group_map'):
             self.island_group_map = {}
 
@@ -41,7 +38,10 @@ class IslandGraph(Save):
             self.group_position = self.calculate_group_centroids()
 
             self.group_position = self.calculate_group_centroids()
-            self.create_graph_from_positions(self.group_graph, self.group_position, 20, draw=True)
+
+        if not self.__dict__.get('group_graph'):
+            self.group_graph = {}
+            self.create_graph_from_positions(self.group_graph, self.group_position, 30, draw=True)
 
         self.save()
 
@@ -55,6 +55,9 @@ class IslandGraph(Save):
         x1, y1 = position_map[island1]
         x2, y2 = position_map[island2]
         return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+    def calculate_distance_with_start_island(self, island):
+        return self.calculate_distance(island, self.start_island, self.island_positions)
 
     def create_graph_from_positions(self, graph_map, position_map, max_distance=9, draw=False):
         islands = list(position_map.keys())
@@ -105,7 +108,7 @@ class IslandGraph(Save):
     def is_nearby(self, island, neighbor, max_distance=6):
         return self.calculate_distance(island, neighbor, self.island_positions) <= max_distance
 
-    def cluster_islands(self, num_clusters=15, draw=False):
+    def cluster_islands(self, num_clusters=8, draw=False):
         islands = list(self.island_positions.keys())
         coordinates = np.array(list(self.island_positions.values()))
         scaler = StandardScaler()
@@ -119,8 +122,12 @@ class IslandGraph(Save):
 
         group = defaultdict(list)
         for i, label in enumerate(labels):
-            group[f'group_{label}'].append(islands[i])
-            self.island_group_map[islands[i]] = f'group_{label}'
+            island = islands[i]
+            group_name = f'group_{label}'
+            if island == self.start_island:
+                group_name = f'group_{num_clusters}'
+            group[group_name].append(islands[i])
+            self.island_group_map[islands[i]] = group_name
         self.group_island_map = group
 
     @staticmethod
@@ -135,7 +142,6 @@ class IslandGraph(Save):
         plt.xlabel('X')
         plt.ylabel('Y')
         plt.title('Island Clusters')
-        plt.legend()
         plt.show()
 
     def calculate_group_centroids(self):
@@ -215,7 +221,6 @@ class IslandGraph(Save):
         return True
 
     def is_island_valid(self, current_island, visited_islands):
-
         if not visited_islands:
             return True
 
