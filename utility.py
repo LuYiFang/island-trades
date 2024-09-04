@@ -83,10 +83,15 @@ class Exchange:
         if self.level == 1:
             return 2000000
 
-    def count_max_allowable_trades(self, load_capacity, stock_count, current_swap_cost):
+    def count_max_allowable_trades(self, load_capacity, stock_count, reserved_count, current_swap_cost):
         if self.level == 1:
             stock_count = 1000
-        max_trades = math.floor(math.floor(load_capacity / self.weight) / self.ratio)
-        return min(self.trades, self.maximum_exchange, max_trades, stock_count,
-                   self.remain_exchange, math.floor(current_swap_cost / self.swap_cost))
 
+        max_trades = math.floor(math.floor(load_capacity / self.weight) / self.ratio)
+        max_swap_cost = math.floor(current_swap_cost / self.swap_cost)
+        return min(
+            self.trades, self.maximum_exchange,
+            max_trades, stock_count,
+            self.remain_exchange, max_swap_cost,
+            stock_count - reserved_count
+        )

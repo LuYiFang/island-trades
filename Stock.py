@@ -1,3 +1,6 @@
+import logging
+from collections import defaultdict
+
 from exchange_items import trade_items
 from utility import Save, Exchange
 
@@ -34,8 +37,11 @@ class Stock(Save):
         self.item_weight = self.update_item_weight()
 
         self.auto_sell = False
-        self.reserved_quantity = {item: 0 for item in all_items}
-        self.sell_quantity = {item: 0 for item in all_items}
+
+        if not self.__dict__.get('reserved_quantity'):
+            self.reserved_quantity = {item: 0 for item in all_items}
+
+        self.sell_quantity = defaultdict(int)
 
     def __getitem__(self, item):
         return self.stock.get(item, 0)
@@ -46,17 +52,26 @@ class Stock(Save):
     def switch_stock(self, is_calc=False):
         self.stock = self._calc_stock if is_calc else self._stock
 
-    def execute_exchange(self, exchange: Exchange, trades):
+    def execute_exchange(self, exchange: Exchange, trades, route_id=None):
         if exchange.level != 1:
             self.stock[exchange.source] -= trades
 
         self.stock[exchange.target] += trades * exchange.ratio
 
-    def undo_execute_exchange(self, exchange: Exchange, trades):
+        if exchange.level == 5 and self.auto_sell and route_id is not None:
+            reserved_count = self.reserved_quantity[exchange.target]
+            self.sell_quantity[route_id] += self.stock[exchange.target] - reserved_count
+            self.stock[exchange.target] = reserved_count
+
+    def undo_execute_exchange(self, exchange: Exchange, trades, route_id=None):
         if exchange.level != 1:
             self.stock[exchange.source] += trades
 
         self.stock[exchange.target] -= trades * exchange.ratio
+
+        if exchange.level == 5 and self.auto_sell and route_id is not None:
+            self.stock[exchange.target] += self.sell_quantity[route_id]
+            self.sell_quantity[route_id] = 0
 
     def restore(self):
         self._stock = self.ori_stock.copy()
@@ -91,8 +106,12 @@ class Stock(Save):
     def switch_auto_sell(self, auto_sell):
         self.auto_sell = auto_sell
 
+    def count_income(self):
+        return sum(self.sell_quantity.values()) * 7500000
+
     def save(self):
         super().save(
             'trade_items',
             '_stock',
+            'reserved_quantity',
         )

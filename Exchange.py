@@ -72,37 +72,9 @@ class ExchangeGraph(Save):
 
             self.save_json(filename.format(version + 1), target)
 
-    def count_max_allowable_exchange(self, exchange: Exchange):
-        if exchange.level == 1:
-            return 10
-
-        max_exchange = math.floor(math.floor(self.ship_load_capacity / exchange.weight) / exchange.ratio)
-        return min(exchange.trades, exchange.maximum_exchange, max_exchange, self.stock[exchange.source],
-                   exchange.remain_exchange)
-
-    def count_max_allowable_weight(self, exchange: Exchange):
-        return self.count_max_allowable_exchange(exchange) * exchange.ratio * exchange.weight
-
-    def count_remaining_weight(self, exchange: Exchange):
-        return self.ship_load_capacity - self.count_max_allowable_weight(exchange)
-
-    def count_min_weight(self, exchange: Exchange):
-        return exchange.weight * exchange.ratio
-
-    def get_exchange_weight(self, exchange: Exchange, trades=None):
-        if exchange.level == 1:
-            return 1000
-
-        available_exchange = exchange.maximum_exchange if trades is None else trades
-        if available_exchange > self.stock[exchange.source]:
-            available_exchange = self.stock[exchange.source]
-        return available_exchange * exchange.ratio * exchange.weight
-
     def schedule_routes(self):
         self.stock.restore()
         self.stock.switch_stock(True)
-
-        #  優先條件: 要囤貨 > 數量較少 > 高價值
 
         def dp(state, visited, island_trades):
             current_island, current_weight, current_swap_cost, current_priority = state
@@ -126,15 +98,18 @@ class ExchangeGraph(Save):
                 if not self.island_graph.is_island_valid(exchange.island, visited):
                     continue
 
-                max_allowable_trades = exchange.count_max_allowable_trades(self.ship_load_capacity - current_weight,
-                                                                           self.stock[exchange.source],
-                                                                           current_swap_cost)
+                max_allowable_trades = exchange.count_max_allowable_trades(
+                    self.ship_load_capacity - current_weight,
+                    self.stock[exchange.source],
+                    self.stock.reserved_quantity[exchange.source],
+                    current_swap_cost
+                )
 
                 if max_allowable_trades <= 0:
                     continue
 
-                if current_weight + (
-                        max_allowable_trades * exchange.ratio * exchange.weight) > self.ship_load_capacity:
+                if current_weight + (max_allowable_trades * exchange.ratio * exchange.weight) \
+                        > self.ship_load_capacity:
                     continue
 
                 all_exchange_zero = False
@@ -195,7 +170,6 @@ class ExchangeGraph(Save):
                 return
 
             find_best_routes(tradable_islands[0][0], remain_swap_cost)
-            return
 
         first_island = list(self.graph.keys())[0]
         find_best_routes(first_island, total_swap_cost)

@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from Exchange import ExchangeGraph
+from exchange_items import default_ship_load_capacity
 from utility import read_json
 
 
@@ -42,7 +43,7 @@ class FileChooser(QWidget):
 
 
 class Worker(QThread):
-    finished = pyqtSignal(dict)
+    finished = pyqtSignal(list)
 
     def __init__(self, exchanges, exchange_graph):
         super(Worker, self).__init__()
@@ -85,61 +86,88 @@ class ScrollableWidget(QWidget):
 class TopWidget(QWidget):
     add_item_signal = QtCore.pyqtSignal(str, object)
 
-    def __init__(self, stock):
+    def __init__(self, stock, exchange_graph):
         super().__init__()
 
         self.stock = stock
+        self.exchange_graph = exchange_graph
+
+        self.load_input = None
+        self.checkbox = None
+        self.add_button = None
+        self.level_combobox = None
+        self.item_input = None
+        self.income_count_label = None
         self.layout = QVBoxLayout(self)
 
-        self.new_item_layout = QHBoxLayout(self)
+        self.add_load_layout()
+        self.add_new_item_layout()
+        self.add_auto_sell_layout()
+        self.add_income_layout()
+        self.setLayout(self.layout)
+
+    def add_load_layout(self):
+        load_layout = QHBoxLayout(self)
+        load_label = QLabel('Ship Load Capacity: ')
+        self.load_input = QSpinBox()
+        self.load_input.setRange(0, 100000)
+        self.load_input.setValue(default_ship_load_capacity)
+
+        self.load_input.valueChanged.connect(self.on_load_value_changed)
+
+        load_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.load_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        load_layout.addWidget(load_label)
+        load_layout.addWidget(self.load_input)
+
+        self.layout.addLayout(load_layout)
+
+    def add_new_item_layout(self):
+        new_item_layout = QHBoxLayout(self)
         self.item_input = QLineEdit()
         self.level_combobox = QComboBox()
-
         level_options = []
-        for k in stock.trade_items.keys():
+        for k in self.stock.trade_items.keys():
             if isinstance(k, int):
                 level_options.append(f'level_{k}')
                 continue
             level_options.append(k)
-
         self.level_combobox.addItems(level_options)
         self.add_button = QPushButton("Add")
-
-        self.new_item_layout.addWidget(QLabel("New Item:"))
-        self.new_item_layout.addWidget(self.item_input)
-        self.new_item_layout.addWidget(QLabel("Level:"))
-        self.new_item_layout.addWidget(self.level_combobox)
-        self.new_item_layout.addWidget(self.add_button)
-
-        self.check_layout = QHBoxLayout(self)
-        checkbox = QCheckBox()
-        label = QLabel('Auto Sell')
-
-        checkbox.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        spacer = QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
-
-        self.check_layout.addWidget(checkbox)
-        self.check_layout.addItem(spacer)
-        self.check_layout.addWidget(label)
-
-        self.sell_layout = QHBoxLayout()
-        income_label = QLabel('收入: ')
-        income_count_label = QLabel('258,432,132')
-        self.sell_layout.addWidget(income_label)
-        self.sell_layout.addWidget(income_count_label)
-
-        income_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        income_count_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        self.layout.addLayout(self.new_item_layout)
-        self.layout.addLayout(self.check_layout)
-        self.layout.addLayout(self.sell_layout)
-
-        self.setLayout(self.layout)
+        new_item_layout.addWidget(QLabel("New Item:"))
+        new_item_layout.addWidget(self.item_input)
+        new_item_layout.addWidget(QLabel("Level:"))
+        new_item_layout.addWidget(self.level_combobox)
+        new_item_layout.addWidget(self.add_button)
 
         self.add_button.clicked.connect(self.add_item)
+        self.layout.addLayout(new_item_layout)
+
+    def add_auto_sell_layout(self):
+        check_layout = QHBoxLayout(self)
+        self.checkbox = QCheckBox()
+        label = QLabel('Auto Sell')
+        self.checkbox.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        spacer = QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
+        check_layout.addWidget(self.checkbox)
+        check_layout.addItem(spacer)
+        check_layout.addWidget(label)
+
+        self.checkbox.stateChanged.connect(self.on_checkbox_changed)
+        self.layout.addLayout(check_layout)
+
+    def add_income_layout(self):
+        sell_layout = QHBoxLayout()
+        income_label = QLabel('收入: ')
+        self.income_count_label = QLabel('')
+        sell_layout.addWidget(income_label)
+        sell_layout.addWidget(self.income_count_label)
+        income_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.income_count_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        self.layout.addLayout(sell_layout)
 
     def add_item(self):
         level = self.level_combobox.currentText().replace('level_', '')
@@ -152,6 +180,18 @@ class TopWidget(QWidget):
         self.add_item_signal.emit(self.item_input.text(), level)
         self.item_input.setText('')
 
+    def on_checkbox_changed(self, state):
+        if state == Qt.Unchecked:
+            self.stock.switch_auto_sell(False)
+        else:
+            self.stock.switch_auto_sell(True)
+
+    def on_load_value_changed(self):
+        self.exchange_graph.ship_load_capacity = self.load_input.value()
+
+    def update_income(self, income):
+        self.income_count_label.setText(f'{income:,}')
+
 
 class ColorComboBox(QComboBox):
     color_changed = QtCore.pyqtSignal(int)
@@ -162,13 +202,13 @@ class ColorComboBox(QComboBox):
         self.stock = stock
 
         self.color_dict = {
-            "normal": QColor(242, 234, 205),
-            1: QColor(99, 99, 98),
-            2: QColor(30, 132, 0),
-            3: QColor(33, 63, 209),
-            4: QColor(217, 185, 2),
-            5: QColor(219, 58, 37),
-            "material": QColor(117, 39, 219)
+            "normal": QColor(255, 247, 217),
+            1: QColor(161, 161, 161),
+            2: QColor(109, 132, 17),
+            3: QColor(64, 150, 193),
+            4: QColor(170, 130, 63),
+            5: QColor(209, 103, 90),
+            "material": QColor(105, 90, 209)
         }
 
         self.init_options()
@@ -179,6 +219,7 @@ class ColorComboBox(QComboBox):
             for item_info in self.stock.trade_items.get(level, []):
                 self.addItem(f'{item_info["name"]}')
                 self.setItemData(self.count() - 1, color, Qt.BackgroundRole)
+                self.setItemData(self.count() - 1, QColor(25, 25, 25), Qt.ForegroundRole)
 
         self.update_background(self.currentIndex())
 
@@ -188,7 +229,7 @@ class ColorComboBox(QComboBox):
 
     def update_background(self, index):
         color = self.itemData(index, Qt.BackgroundRole)
-        self.setStyleSheet(f"QComboBox {{ background-color: {color.name()}; color: white; }}")
+        self.setStyleSheet(f"QComboBox {{ background-color: {color.name()}; color: black; }}")
 
         text = self.itemData(index, Qt.DisplayRole)
         level = self.stock.item_level[text]
@@ -211,8 +252,8 @@ class ItemGroup(QWidget):
         self.quantity_input.setRange(0, 100)
 
         self.swap_cost_input = QSpinBox()
+        self.swap_cost_input.setRange(0, 100000)
         self.swap_cost_input.setValue(11485)
-        self.swap_cost_input.setRange(0, 10000)
 
         self.specified_quantity_input = QSpinBox()
         self.specified_quantity_input.setRange(0, 100)
@@ -226,12 +267,12 @@ class ItemGroup(QWidget):
 
         self.setLayout(layout)
 
-        self.update_default_quantity(1)
+        self.update_default_quantity('normal')
 
         self.item_combobox_source.color_changed.connect(self.update_default_quantity)
 
     def update_default_quantity(self, level):
-        if level == 0 or level == 4:
+        if level == 'normal' or level == 4:
             self.quantity_input.setValue(1)
             return
         if level == 1 or level == 2:
@@ -298,13 +339,14 @@ class MiddleWidget(ScrollableWidget):
 
 
 class Route(QWidget):
-    def __init__(self, island, item_a, item_b, num, stock, exchange, stock_update_signal):
+    def __init__(self, island, exchange, num, stock, stock_update_signal, income_update_signal):
         super(Route, self).__init__()
 
         self.stock = stock
         self.exchange = exchange
         self.trades = num
         self.stock_update_signal = stock_update_signal
+        self.income_update_signal = income_update_signal
 
         image_path_a = "static/玫瑰.png"
         image_path_b = "static/玫瑰.png"
@@ -325,10 +367,10 @@ class Route(QWidget):
         layout.addWidget(self.checkbox)
         layout.addWidget(QLabel(island))
         layout.addWidget(label_a)
-        layout.addWidget(QLabel(item_a))
+        layout.addWidget(QLabel(exchange.source))
         layout.addWidget(QLabel(" -> "))
         layout.addWidget(label_b)
-        layout.addWidget(QLabel(item_b))
+        layout.addWidget(QLabel(exchange.target))
         layout.addWidget(QLabel(f": {num}"))
         self.setLayout(layout)
 
@@ -336,45 +378,63 @@ class Route(QWidget):
         self.stock.switch_stock(False)
 
         if state == Qt.Unchecked:
-            self.stock.undo_execute_exchange(self.exchange, self.trades)
+            self.stock.undo_execute_exchange(self.exchange, self.trades, id(self))
         else:
-            self.stock.execute_exchange(self.exchange, self.trades)
+            self.stock.execute_exchange(self.exchange, self.trades, id(self))
 
         self.stock_update_signal.emit([self.exchange.source, self.exchange.target])
+        self.income_update_signal.emit(self.stock.count_income())
 
 
 class RouteViewWidget(ScrollableWidget):
-    def __init__(self, stock, stock_update_signal):
+    def __init__(self, stock, stock_update_signal, income_update_signal):
         super().__init__()
 
         self.stock = stock
         self.stock_update_signal = stock_update_signal
+        self.income_update_signal = income_update_signal
 
         self.route_list = []
         self.group_list = []
 
-    def update_routes(self, routes):
-        self.clean_view()
+        loading_layout = QHBoxLayout()
+        self.loading = QLabel('Scheduling...')
+        loading_layout.addStretch()
+        loading_layout.addWidget(self.loading)
+        loading_layout.addStretch()
+        self.loading.hide()
+        self.layout.addLayout(loading_layout)
 
-        for group_name, route_path in routes.items():
+    def start_loading(self):
+        self.clean_view()
+        self.loading.show()
+
+    def stop_loading(self):
+        self.loading.hide()
+
+    def update_routes(self, routes):
+        for i, route_path in enumerate(routes):
+            group_name = f'group_{i}'
             group = QGroupBox(group_name)
             group_layout = QVBoxLayout(group)
 
             self.group_list.append(group)
 
-            for island, exchange_info in route_path.items():
+            for island, (exchange, trades) in route_path.items():
                 route = Route(
                     island,
-                    exchange_info['source'],
-                    exchange_info['target'],
-                    exchange_info['exchange'],
-                    self.stock, exchange_info['exchange_obj'],
-                    self.stock_update_signal
+                    exchange,
+                    trades,
+                    self.stock,
+                    self.stock_update_signal,
+                    self.income_update_signal
                 )
                 group_layout.addWidget(route)
 
                 self.add_widget_to_scroll(group)
                 self.route_list.append(route)
+
+        self.stop_loading()
 
     def clean_view(self):
         for group in self.group_list:
@@ -407,7 +467,7 @@ class StockWidget(ScrollableWidget):
             if not self.item_counts.get(key):
                 continue
             self.item_counts[key].setText(f'{self.stock[key]}')
-            self.item_spin_boxes[key][0].setValue(self.stock[key])
+            self.item_spin_boxes[key][1].setValue(self.stock[key])
 
     def build_item_grid(self):
         self.stock.switch_stock(False)
@@ -429,21 +489,35 @@ class StockWidget(ScrollableWidget):
                 label_item = QLabel(f"{item_name}")
                 label_count = QLabel(f"{item_count}")
 
-                input_field = QSpinBox()
-                input_field.setRange(0, 1000)
-                input_field.setValue(item_count)
+                quantity_label = QLabel('Qty')
+                quantity_input = QSpinBox()
+                quantity_input.setRange(0, 1000)
+                quantity_input.setValue(item_count)
 
-                stock_quantity_input = QSpinBox()
-                stock_quantity_input.setRange(0, 1000)
-                stock_quantity_input.setValue(0)
+                quantity_count = self.stock.reserved_quantity[item['name']]
+                reserved_label = QLabel('Res.')
+                reserved_quantity_input = QSpinBox()
+                reserved_quantity_input.setRange(0, 1000)
+                reserved_quantity_input.setValue(quantity_count)
 
                 vbox_layout = QVBoxLayout()
                 vbox_layout.addWidget(label_item)
                 vbox_layout.addWidget(label_count)
-                vbox_layout.addWidget(input_field)
-                vbox_layout.addWidget(stock_quantity_input)
-                input_field.hide()
-                stock_quantity_input.hide()
+
+                quantity_layout = QHBoxLayout()
+                quantity_layout.addWidget(quantity_label)
+                quantity_layout.addWidget(quantity_input)
+                vbox_layout.addLayout(quantity_layout)
+
+                reserved_layout = QHBoxLayout()
+                reserved_layout.addWidget(reserved_label)
+                reserved_layout.addWidget(reserved_quantity_input)
+                vbox_layout.addLayout(reserved_layout)
+
+                quantity_label.hide()
+                quantity_input.hide()
+                reserved_label.hide()
+                reserved_quantity_input.hide()
 
                 vbox_layout.addStretch()
 
@@ -457,7 +531,8 @@ class StockWidget(ScrollableWidget):
                 grid_layout.addLayout(hbox_layout, row, col)
 
                 self.item_counts[item_name] = label_count
-                self.item_spin_boxes[item_name] = (input_field, stock_quantity_input)
+                self.item_spin_boxes[item_name] = (
+                    quantity_label, quantity_input, reserved_label, reserved_quantity_input)
 
             groupbox.setLayout(grid_layout)
 
@@ -476,66 +551,74 @@ class StockWidget(ScrollableWidget):
         self.button_modify.setText(self.modify_count_text)
 
     def show_spin_boxes(self):
-        for key, spins in self.item_spin_boxes.items():
+        for key, (
+                quantity_label, quantity_input, reserved_label,
+                reserved_quantity_input) in self.item_spin_boxes.items():
             self.item_counts[key].hide()
-            spins[0].show()
-            spins[1].show()
+            quantity_label.show()
+            quantity_input.show()
+            reserved_label.show()
+            reserved_quantity_input.show()
 
     def confirm_count(self):
         self.stock.switch_stock(False)
         self.button_modify.setText(self.modify_count_text)
-        for item_name, (input_field, stock_quantity_input) in self.item_spin_boxes.items():
-            self.stock[item_name] = input_field.value()
+        for item_name, (
+                quantity_label, quantity_input, reserved_label,
+                reserved_quantity_input) in self.item_spin_boxes.items():
+            self.stock[item_name] = quantity_input.value()
+            self.stock.reserved_quantity[item_name] = reserved_quantity_input.value()
             self.item_counts[item_name].setText(f'{self.stock[item_name]}')
-            input_field.hide()
-            stock_quantity_input.hide()
+            quantity_label.hide()
+            quantity_input.hide()
+            reserved_label.hide()
+            reserved_quantity_input.hide()
             self.item_counts[item_name].show()
 
 
 class MainWindow(QWidget):
-    submit_button_signal = QtCore.pyqtSignal(dict)
+    submit_button_signal = QtCore.pyqtSignal(list)
     stock_update_signal = QtCore.pyqtSignal(list)
+    income_update_signal = QtCore.pyqtSignal(int)
     upload_exchange_signal = QtCore.pyqtSignal(str)
 
     def __init__(self, island_graph, stock):
         super(MainWindow, self).__init__()
 
-        try:
-            self.stock = stock
-            self.island_graph = island_graph
-            self.islands = sorted(list(island_graph.island_group_map.keys()))
-            self.exchange_graph = ExchangeGraph(10891, self.stock, self.island_graph)
+        self.stock = stock
+        self.island_graph = island_graph
+        self.islands = sorted(list(island_graph.island_group_map.keys()))
+        self.exchange_graph = ExchangeGraph(self.stock, self.island_graph)
 
-            self.set_font()
+        self.set_font()
+        self.set_theme()
 
-            main_layout = QHBoxLayout(self)
+        main_layout = QHBoxLayout(self)
 
-            self.top_view = TopWidget(self.stock)
-            self.submit_button = QPushButton("Submit")
-            self.middle_view = MiddleWidget(self.islands, self.stock)
-            self.route_view = RouteViewWidget(self.stock, self.stock_update_signal)
-            self.save_exchange_button = QPushButton("Save Exchange")
-            left_layout = self.add_left_area()
+        self.top_view = TopWidget(self.stock, self.exchange_graph)
+        self.submit_button = QPushButton("Submit")
+        self.middle_view = MiddleWidget(self.islands, self.stock)
+        self.route_view = RouteViewWidget(self.stock, self.stock_update_signal, self.income_update_signal)
+        self.save_exchange_button = QPushButton("Save Exchange")
+        left_layout = self.add_left_area()
 
-            self.stock_view = StockWidget(self.stock)
-            right_layout = self.add_stock_view()
+        self.stock_view = StockWidget(self.stock)
+        right_layout = self.add_stock_view()
 
-            main_layout.addLayout(left_layout, 1)
-            main_layout.addLayout(right_layout, 2)
+        main_layout.addLayout(left_layout, 1)
+        main_layout.addLayout(right_layout, 2)
 
-            self.setWindowTitle("Island Trade")
-            self.resize(1700, 900)
+        self.setWindowTitle("Island Trade")
+        self.resize(1800, 900)
 
-            self.submit_button.clicked.connect(self.run_schedule)
-            self.save_exchange_button.clicked.connect(self.save_exchange)
+        self.submit_button.clicked.connect(self.run_schedule)
+        self.save_exchange_button.clicked.connect(self.save_exchange)
 
-            self.submit_button_signal.connect(self.route_view.update_routes)
-            self.stock_update_signal.connect(self.stock_view.update_items)
-            self.top_view.add_item_signal.connect(self.middle_view.update_item_options)
-            self.upload_exchange_signal.connect(self.middle_view.add_item_by_file)
-
-        except Exception as e:
-            logging.exception(e)
+        self.submit_button_signal.connect(self.route_view.update_routes)
+        self.stock_update_signal.connect(self.stock_view.update_items)
+        self.income_update_signal.connect(self.top_view.update_income)
+        self.top_view.add_item_signal.connect(self.middle_view.update_item_options)
+        self.upload_exchange_signal.connect(self.middle_view.add_item_by_file)
 
     def add_left_area(self):
         left_layout = QVBoxLayout(self)
@@ -544,13 +627,13 @@ class MainWindow(QWidget):
         left_layout.addWidget(self.top_view, 1)
         left_layout.addWidget(self.middle_view, 2)
 
+        left_layout.addWidget(self.submit_button)
+
         import_export_layout = QHBoxLayout()
         self.setLayout(import_export_layout)
         import_export_layout.addWidget(FileChooser(self.upload_exchange_signal))
         import_export_layout.addWidget(self.save_exchange_button)
         left_layout.addLayout(import_export_layout)
-
-        left_layout.addWidget(self.submit_button)
 
         left_layout.addWidget(self.route_view, 2)
         return left_layout
@@ -563,6 +646,22 @@ class MainWindow(QWidget):
     def set_font(self):
         font = QFont("Microsoft JhengHei", 12)
         QApplication.setFont(font)
+
+    def set_theme(self):
+        self.setStyleSheet("""
+                    QWidget {
+                        background-color: #2b2b2b;
+                        color: #a9b7c6;
+                    }
+                    QPushButton {
+                        background-color: #4C4C4C;
+                        color: #a9b7c6;
+                        /*border: 1px solid #5A5A5A;*/
+                    }
+                    QPushButton:hover {
+                        background-color: #5A5A5A;
+                    }
+                """)
 
     def save_exchange(self):
         self.exchange_graph.save('save_graph')
@@ -581,6 +680,7 @@ class MainWindow(QWidget):
         self.worker = Worker(exchanges, self.exchange_graph)
         self.worker.finished.connect(self.submit_button_signal.emit)
         self.worker.start()
+        self.route_view.start_loading()
 
     def closeEvent(self, a0):
         self.stock.save()
