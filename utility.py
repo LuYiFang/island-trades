@@ -1,8 +1,11 @@
-import functools
 import json
-import logging
 import math
 import os
+from collections import namedtuple
+
+
+Station_tuple = namedtuple('Station_tuple', ['exchange', 'trades'])
+Route_tuple = namedtuple('Route_tuple', ['name', 'stations'])
 
 
 def read_json(filename):
@@ -46,7 +49,12 @@ class Save:
 
 
 class Exchange:
-    def __init__(self, island, source, target, ratio, swap_cost=11485, trades=None, level=None, weight=0, priority=1):
+    def __init__(
+            self,
+            island, source, target, ratio,
+            swap_cost=11485, level=None, weight=0, priority=1,
+            source_img='', target_img='',
+    ):
         self.island = island
         self.source = source
         self.target = target
@@ -54,6 +62,8 @@ class Exchange:
         self.swap_cost = swap_cost
         self.weight = weight
         self.priority = priority
+        self.source_img = source_img
+        self.target_img = target_img
 
         self.maximum_exchange = 10
         self.level = level
@@ -61,15 +71,10 @@ class Exchange:
         if self.level == 5:
             self.maximum_exchange = 6
 
-        self.trades = trades if trades else self.maximum_exchange
-        self.remain_exchange = self.init_remain_exchange()
+        self.trades = 1000
+        self.remain_exchange = self.maximum_exchange
 
         self.price = self.get_price()
-
-    def init_remain_exchange(self):
-        if self.trades > self.maximum_exchange:
-            return self.maximum_exchange
-        return self.trades
 
     def get_price(self):
         if self.level == 5:
@@ -90,7 +95,7 @@ class Exchange:
         max_trades = math.floor(math.floor(load_capacity / self.weight) / self.ratio)
         max_swap_cost = math.floor(current_swap_cost / self.swap_cost)
         return min(
-            self.trades, self.maximum_exchange,
+            self.maximum_exchange,
             max_trades, stock_count,
             self.remain_exchange, max_swap_cost,
             stock_count - reserved_count

@@ -22,7 +22,12 @@ class Stock(Save):
                 int_trade_items[level] = items
             self.trade_items = int_trade_items
 
-        all_items = [item['name'] for items in self.trade_items.values() for item in items]
+        all_items = []
+        self.item_images = {}
+        for items in self.trade_items.values():
+            for item in items:
+                all_items.append(item['name'])
+                self.item_images[item['name']] = item.get('img', '')
 
         if not self.__dict__.get('_stock'):
             self._stock = {}
@@ -66,7 +71,6 @@ class Stock(Save):
     def undo_execute_exchange(self, exchange: Exchange, trades, route_id=None):
         if exchange.level != 1:
             self.stock[exchange.source] += trades
-
         self.stock[exchange.target] -= trades * exchange.ratio
 
         if exchange.level == 5 and self.auto_sell and route_id is not None:

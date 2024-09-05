@@ -119,6 +119,10 @@ island_position = {
 
     '赫爾馬': (26, 3),
     '卡修麻': (27, 5),
+
+    '貝村': (-10, -11),
+    '艾港': (-32, -15),
+    '澳眼': (-5, 20),
 }
 
-default_ship_load_capacity = 20000
+default_ship_load_capacity = 10891
