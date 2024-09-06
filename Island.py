@@ -139,10 +139,6 @@ class IslandGraph(Save):
                     continue
                 distance = self.calculate_distance(island1, island2, is_group)
                 if distance <= max_distance:
-                    self.add_edge(island1, island2, distance, graph_map)
-
-        if draw:
-            self.draw_graph(graph_map, position_map)
                     self.add_edge(island1, island2, distance, is_group)
                     nx_graph.add_edge(island1, island2, weight=distance)
 

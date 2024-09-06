@@ -92,7 +92,6 @@ class Exchange:
         if self.level == 1:
             available_stock = 1000
 
-        max_trades = math.floor(math.floor(load_capacity / self.weight) / self.ratio)
         if self.ratio == 0:
             max_trades = 0
         else:
