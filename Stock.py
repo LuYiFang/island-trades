@@ -45,6 +45,8 @@ class Stock(Save):
 
         if not self.__dict__.get('reserved_quantity'):
             self.reserved_quantity = {item: 0 for item in all_items}
+            for item in self.trade_items[5]:
+                self.reserved_quantity[item['name']] = 2
 
         self.sell_quantity = defaultdict(int)
 
@@ -97,8 +99,10 @@ class Stock(Save):
         item_weight = {}
         for level, items in self.trade_items.items():
             for item in items:
-                weight = 100
-                if level == 2:
+                weight = 1
+                if level == 1:
+                    weight = 100
+                elif level == 2:
                     weight = 800
                 elif level == 3:
                     weight = 900
@@ -112,6 +116,11 @@ class Stock(Save):
 
     def count_income(self):
         return sum(self.sell_quantity.values()) * 7500000
+
+    def count_available_stock(self, exchange: Exchange):
+        if exchange.level == 'material':
+            return self.stock[exchange.source]
+        return self.stock[exchange.source] - self.reserved_quantity[exchange.source]
 
     def save(self):
         super().save(

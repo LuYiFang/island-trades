@@ -21,9 +21,11 @@ class IslandGraph(Save):
             self.start_island = start_island
             self.island_positions = island_position.copy()
 
-            if not self.__dict__.get('graph'):
-                self.graph = {}
-                self.create_graph_from_positions(self.graph, self.island_positions, 7, draw=True)
+            self.island_nx_graph = nx.Graph()
+            self.group_nx_graph = nx.Graph()
+
+            self.graph = {}
+            self.create_graph_from_positions(False, 7)
 
             if not self.__dict__.get('island_group_map'):
                 self.island_group_map = {}
@@ -38,9 +40,8 @@ class IslandGraph(Save):
 
                 self.group_position = self.calculate_group_centroids()
 
-            if not self.__dict__.get('group_graph'):
-                self.group_graph = {}
-                self.create_graph_from_positions(self.group_graph, self.group_position, 25, draw=True)
+            self.group_graph = {}
+            self.create_graph_from_positions(True, 25)
 
             self.save()
         except Exception as e:
@@ -51,17 +52,18 @@ class IslandGraph(Save):
         if island not in self.graph:
             self.graph[island] = []
 
-    @staticmethod
-    def calculate_distance(island1, island2, position_map):
+    def calculate_distance(self, island1, island2, is_group=False):
+        _, position_map, _ = self.get_variable_group(is_group)
         x1, y1 = position_map[island1]
         x2, y2 = position_map[island2]
         return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
     def calculate_distance_with_start_island(self, island):
-        return self.calculate_distance(island, self.start_island, self.island_positions)
+        return self.calculate_distance(island, self.start_island)
 
-    @staticmethod
-    def add_edge(u, v, weight, graph_map):
+    def add_edge(self, u, v, weight, is_group):
+        graph_map, _, _ = self.get_variable_group(is_group)
+
         if u not in graph_map:
             graph_map[u] = []
         graph_map[u].append((v, float(weight)))
@@ -70,14 +72,9 @@ class IslandGraph(Save):
             graph_map[v] = []
         graph_map[v].append((u, float(weight)))
 
-    @staticmethod
-    def draw_graph(graph_map, position_map):
+    def draw_graph(self, is_group):
+        graph_map, position_map, nx_graph = self.get_variable_group(is_group)
         plt.figure()
-        nx_graph = nx.Graph()
-
-        for island, neighbors in graph_map.items():
-            for neighbor in neighbors:
-                nx_graph.add_edge(island, neighbor[0], weight=neighbor[1])
 
         plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']
         plt.rcParams['axes.unicode_minus'] = False
@@ -102,7 +99,7 @@ class IslandGraph(Save):
         plt.show(block=False)
 
     def draw_island_graph(self):
-        self.draw_graph(self.graph, self.island_positions)
+        self.draw_graph(False)
 
     def draw_island_group(self):
         try:
@@ -125,20 +122,29 @@ class IslandGraph(Save):
             logging.exception(e)
 
     def draw_group_graph(self):
-        self.draw_graph(self.group_graph, self.group_position)
+        self.draw_graph(True)
 
-    def create_graph_from_positions(self, graph_map, position_map, max_distance=9, draw=False):
+    def get_variable_group(self, is_group):
+        return self.group_graph if is_group else self.graph, \
+               self.group_position if is_group else self.island_positions, \
+               self.group_nx_graph if is_group else self.island_nx_graph
+
+    def create_graph_from_positions(self, is_group, max_distance=9):
+        graph_map, position_map, nx_graph = self.get_variable_group(is_group)
+
         islands = list(position_map.keys())
         for i, island1 in enumerate(islands):
             for j, island2 in enumerate(islands):
                 if i == j:
                     continue
-                distance = self.calculate_distance(island1, island2, position_map)
+                distance = self.calculate_distance(island1, island2, is_group)
                 if distance <= max_distance:
                     self.add_edge(island1, island2, distance, graph_map)
 
         if draw:
             self.draw_graph(graph_map, position_map)
+                    self.add_edge(island1, island2, distance, is_group)
+                    nx_graph.add_edge(island1, island2, weight=distance)
 
     def cluster_islands(self, num_clusters=8, draw=False):
         islands = list(self.island_positions.keys())
@@ -189,38 +195,8 @@ class IslandGraph(Save):
         start_group = self.island_group_map[start]
         end_group = self.island_group_map[end]
 
-        distance = {group: float('inf') for group in self.group_graph}
-        distance[start_group] = 0
-        priority_queue = [(0, start_group)]
-
-        parent_map = {start_group: None}
-
-        while priority_queue:
-            current_distance, current_group = heapq.heappop(priority_queue)
-
-            if current_group == end_group:
-                break
-
-            if current_distance > distance[current_group]:
-                continue
-
-            for neighbor, weight in self.group_graph.get(current_group, []):
-                distance_through_current = current_distance + weight
-                if distance_through_current < distance[neighbor]:
-                    distance[neighbor] = distance_through_current
-                    parent_map[neighbor] = current_group
-                    heapq.heappush(priority_queue, (distance_through_current, neighbor))
-
-        if end_group in parent_map:
-            path = []
-            step = end_group
-            while step is not None:
-                path.append(step)
-                step = parent_map[step]
-            path.reverse()
-            return path
-        else:
-            return None
+        graph_map, position_map, nx_graph = self.get_variable_group(True)
+        return nx.dijkstra_path(nx_graph, start_group, end_group)
 
     def find_passed_islands(self, start, end):
         pass_group = self.find_passed_group(start, end)
@@ -234,13 +210,13 @@ class IslandGraph(Save):
         return pass_islands
 
     def is_nearby(self, island, neighbor, max_distance=6):
-        return self.calculate_distance(island, neighbor, self.island_positions) <= max_distance
+        return self.calculate_distance(island, neighbor) <= max_distance
 
     def is_passed_by(self, current_island, visited_islands):
         max_distance = -float('inf')
         farthest_island = self.start_island
         for visited_island in visited_islands:
-            dist = self.calculate_distance(self.start_island, visited_island, self.island_positions)
+            dist = self.calculate_distance(self.start_island, visited_island)
             if max_distance < dist:
                 max_distance = dist
                 farthest_island = visited_island
@@ -267,22 +243,20 @@ class IslandGraph(Save):
     def save(self):
         super().save(
             'exchanges',
-            'group_graph',
             'island_group_map',
             'group_island_map',
             'group_position',
         )
 
     def find_best_path(self, islands):
+        if len(islands) <= 1:
+            return islands
         source = min(islands, key=lambda x: self.calculate_distance_with_start_island(x))
         target = max(islands, key=lambda x: self.calculate_distance_with_start_island(x))
         nx_graph = nx.Graph()
         for island in islands:
-            neighbors = self.graph[island]
-            for neighbor in neighbors:
-                nx_graph.add_edge(island, neighbor[0], weight=neighbor[1])
+            for neighbor in islands:
+                nx_graph.add_edge(island, neighbor, weight=self.calculate_distance(island, neighbor))
 
         shortest_path = nx.dijkstra_path(nx_graph, source, target)
         return shortest_path
-
-

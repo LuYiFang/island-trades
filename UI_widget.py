@@ -99,7 +99,7 @@ class ScrollableWidget(QWidget):
 
 
 class ColorComboBox(QComboBox):
-    color_changed = QtCore.pyqtSignal(object)
+    color_changed = QtCore.pyqtSignal(list)
 
     def __init__(self, stock):
         super().__init__()
@@ -117,69 +117,100 @@ class ColorComboBox(QComboBox):
         }
 
         self.init_options()
-        self.currentIndexChanged.connect(self.update_background)
+        self.currentIndexChanged.connect(self.index_update_background)
 
     def init_options(self):
-        for level, color in self.color_dict.items():
-            for item_info in self.stock.trade_items.get(level, []):
+        for i, (level, color) in enumerate(self.color_dict.items()):
+            for j, item_info in enumerate(self.stock.trade_items.get(level, [])):
                 self.addItem(f'{item_info["name"]}')
                 self.setItemData(self.count() - 1, color, Qt.BackgroundRole)
                 self.setItemData(self.count() - 1, QColor(25, 25, 25), Qt.ForegroundRole)
-
-        self.update_background(self.currentIndex())
+                if i == j == 0:
+                    self.update_background(self.currentIndex(), False)
 
     def update_option(self, item, level):
         self.insertItem(0, item)
         self.setItemData(0, self.color_dict[level], Qt.BackgroundRole)
 
-    def update_background(self, index):
+    def index_update_background(self, index):
+        self.update_background(index, True)
+
+    def update_background(self, index, popup=True):
         color = self.itemData(index, Qt.BackgroundRole)
         self.setStyleSheet(f"QComboBox {{ background-color: {color.name()}; color: black; }}")
 
         text = self.itemData(index, Qt.DisplayRole)
         level = self.stock.item_level[text]
-        self.color_changed.emit(level)
+        self.color_changed.emit([level, popup])
 
 
 class ItemGroup(QWidget):
-    def __init__(self, islands, stock):
+    def __init__(self, islands, stock, *default_values):
         super(ItemGroup, self).__init__()
 
         self.stock = stock
 
         layout = QHBoxLayout()
 
-        self.island_combobox = QComboBox()
-        self.island_combobox.setEditable(True)
-        self.island_combobox.addItems(islands)
+        try:
 
-        self.item_combobox_source = ColorComboBox(stock)
-        self.item_combobox_target = ColorComboBox(stock)
+            island, source, target, ratio = None, None, None, None
+            if default_values:
+                island, source, target, ratio = default_values
 
-        self.ratio_input = QSpinBox()
-        self.ratio_input.setRange(0, 100)
+            self.island_combobox = QComboBox()
+            self.island_combobox.setEditable(True)
+            self.island_combobox.addItems(islands)
+            if island is not None:
+                self.island_combobox.setCurrentText(island)
 
-        self.swap_cost_input = QSpinBox()
-        self.swap_cost_input.setRange(0, 100000)
-        self.swap_cost_input.setValue(11260)
+            self.item_combobox_source = ColorComboBox(stock)
+            if source is not None:
+                self.item_combobox_source.setCurrentText(source)
 
-        layout.addWidget(self.island_combobox, 2)
-        layout.addWidget(self.item_combobox_source, 3)
-        layout.addWidget(self.item_combobox_target, 3)
-        layout.addWidget(self.ratio_input, 1)
-        layout.addWidget(self.swap_cost_input, 1)
+            self.item_combobox_target = ColorComboBox(stock)
+            if target is not None:
+                self.item_combobox_target.setCurrentText(target)
 
-        self.setLayout(layout)
+            self.ratio_input = QSpinBox()
+            self.ratio_input.setRange(0, 100)
+            if ratio is not None:
+                self.ratio_input.setValue(ratio)
 
-        self.update_default_quantity('normal')
+            self.swap_cost_input = QSpinBox()
+            self.swap_cost_input.setRange(0, 100000)
+            self.swap_cost_input.setValue(11485)
 
-        self.item_combobox_source.color_changed.connect(self.update_default_quantity)
+            layout.addWidget(self.island_combobox, 2)
+            layout.addWidget(self.item_combobox_source, 3)
+            layout.addWidget(self.item_combobox_target, 3)
+            layout.addWidget(self.ratio_input, 1)
+            layout.addWidget(self.swap_cost_input, 1)
 
-    def update_default_quantity(self, level):
-        popup_height = self.item_combobox_target.view().height()
-        item_height = self.item_combobox_target.view().sizeHintForRow(0)
-        visible_items_count = popup_height // item_height
+            self.setLayout(layout)
 
+            if default_values:
+                self.update_default_quantity([stock.item_level.get(source, 'normal'), False])
+            else:
+                self.update_default_quantity(['normal', False])
+
+            self.item_combobox_source.color_changed.connect(self.update_default_quantity)
+        except Exception as e:
+            logging.exception(e)
+
+    def update_default_quantity(self, params):
+        level, popup = params
+        if level == 'normal' or level == 4:
+            self.ratio_input.setValue(1)
+        elif level == 1 or level == 2:
+            self.ratio_input.setValue(3)
+        elif level == 3 or level == 5:
+            self.ratio_input.setValue(2)
+
+        if not popup:
+            return
+
+        visible_items_count = 10
         count = 0
         for _level in self.item_combobox_target.color_dict.keys():
             items = self.stock.trade_items[_level]
@@ -192,15 +223,6 @@ class ItemGroup(QWidget):
         self.item_combobox_target.view().scrollTo(
             self.item_combobox_target.model().index(count + visible_items_count - 1, 0)
         )
-
-        if level == 'normal' or level == 4:
-            self.ratio_input.setValue(1)
-            return
-        if level == 1 or level == 2:
-            self.ratio_input.setValue(3)
-            return
-        if level == 3:
-            self.ratio_input.setValue(2)
 
 
 class Station(QWidget):

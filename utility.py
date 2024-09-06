@@ -3,7 +3,6 @@ import math
 import os
 from collections import namedtuple
 
-
 Station_tuple = namedtuple('Station_tuple', ['exchange', 'trades'])
 Route_tuple = namedtuple('Route_tuple', ['name', 'stations'])
 
@@ -87,16 +86,22 @@ class Exchange:
             return 3000000
         if self.level == 1:
             return 2000000
+        return 0
 
-    def count_max_allowable_trades(self, load_capacity, stock_count, reserved_count, current_swap_cost):
+    def count_max_allowable_trades(self, load_capacity, available_stock, current_swap_cost):
         if self.level == 1:
-            stock_count = 1000
+            available_stock = 1000
 
         max_trades = math.floor(math.floor(load_capacity / self.weight) / self.ratio)
+        if self.ratio == 0:
+            max_trades = 0
+        else:
+            max_trades = math.floor(math.floor(load_capacity / self.weight) / self.ratio)
         max_swap_cost = math.floor(current_swap_cost / self.swap_cost)
         return min(
             self.maximum_exchange,
-            max_trades, stock_count,
-            self.remain_exchange, max_swap_cost,
-            stock_count - reserved_count
+            self.remain_exchange,
+            max_trades,
+            available_stock,
+            max_swap_cost,
         )

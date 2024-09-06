@@ -156,26 +156,21 @@ class MiddleWidget(ScrollableWidget):
 
         self.layout.setAlignment(Qt.AlignTop)
 
-        self.add_item_button.clicked.connect(self.add_item_group)
+        self.add_item_button.clicked.connect(self.button_add_item_group)
 
-    def create_item_group(self):
-        group = ItemGroup(self.islands, self.stock)
+    def button_add_item_group(self):
+        self.add_item_group()
+
+    def add_item_group(self, island=None, source=None, target=None, ratio=None):
+        group = ItemGroup(self.islands, self.stock, island, source, target, ratio)
         self.item_groups.append(group)
-        return group
-
-    def add_item_group(self):
-        group = self.create_item_group()
         self.add_widget_to_scroll(group)
         return group
 
     def add_item_by_file(self, filename):
         data = read_json(filename)
         for i, (island, info) in enumerate(data.items()):
-            group = self.add_item_group()
-            group.island_combobox.setCurrentText(island)
-            group.item_combobox_source.setCurrentText(info['source'])
-            group.item_combobox_target.setCurrentText(info['target'])
-            group.ratio_input.setValue(info['ratio'])
+            self.add_item_group(island, info['source'], info['target'], info['ratio'])
 
     def update_item_options(self, item, level):
         try:
@@ -194,8 +189,9 @@ class RouteViewWidget(ScrollableWidget):
         self.stock_update_signal = stock_update_signal
         self.income_update_signal = income_update_signal
 
-        self.route_list = []
+        self.station_list = []
         self.group_list = []
+        self.routes = []
 
         loading_layout = QHBoxLayout()
         self.loading = QLabel('Scheduling...')
@@ -213,6 +209,8 @@ class RouteViewWidget(ScrollableWidget):
         self.loading.hide()
 
     def update_routes(self, routes):
+        self.routes = routes
+
         for group_name, route in routes:
             group = QGroupBox(group_name)
             group_layout = QVBoxLayout(group)
@@ -230,7 +228,7 @@ class RouteViewWidget(ScrollableWidget):
                 group_layout.addWidget(station)
 
                 self.add_widget_to_scroll(group)
-                self.route_list.append(station)
+                self.station_list.append(station)
 
         self.stop_loading()
 
@@ -240,7 +238,7 @@ class RouteViewWidget(ScrollableWidget):
                 group.deleteLater()
         self.group_list = []
 
-        for route in self.route_list:
+        for route in self.station_list:
             if route is not None:
                 route.deleteLater()
-        self.route_list = []
+        self.station_list = []

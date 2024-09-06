@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 
 from PyQt5 import QtCore
 
@@ -7,7 +8,7 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
 )
 
-from Exchange import Scheduler
+from Scheduler import Scheduler
 from UI_schedule import TopWidget, MiddleWidget, RouteViewWidget
 from UI_stock import StockWidget
 from UI_widget import FileChooser, Worker
@@ -103,16 +104,25 @@ class MainWindow(QWidget):
     def save_exchange(self):
         self.exchange_graph.save('save_exchanges')
 
+    def save_remain_exchange(self):
+        remain_exchanges = defaultdict(list)
+        station_index = 0
+        for group_name, route in self.route_view.routes:
+            for exchange, trades in route:
+                if self.route_view.station_list[station_index].check_box.isChecked():
+                    continue
+                remain_exchanges[group_name].append({
+                    'island': exchange.island,
+                    'source': exchange.source,
+                    'target': exchange.target,
+                    'trades': trades,
+                })
+
+                station_index += 1
+        self.exchange_graph.save_exchanges_remain(remain_exchanges)
+
     def run_schedule(self):
-        exchanges = {}
-        for group in self.middle_view.item_groups:
-            island = group.island_combobox.currentText()
-            source = group.item_combobox_source.currentText()
-            target = group.item_combobox_target.currentText()
-            quantity = group.quantity_input.value()
-            swap_cost = group.swap_cost_input.value()
-            specified_quantity = group.specified_quantity_input.value()
-            exchanges[island] = (source, target, quantity, swap_cost, specified_quantity)
+        print('run_schedule')
         try:
             exchanges = {}
             for group in self.middle_view.item_groups:
@@ -123,26 +133,41 @@ class MainWindow(QWidget):
                 swap_cost = group.swap_cost_input.value()
                 exchanges[island] = (source, target, quantity, swap_cost)
 
-        self.worker = Worker(exchanges, self.exchange_graph)
-        self.worker.finished.connect(self.submit_button_signal.emit)
-        self.worker.start()
-        self.route_view.start_loading()
             self.worker = Worker(exchanges, self.exchange_graph)
             self.worker.finished.connect(self.submit_button_signal.emit)
             self.worker.start()
             self.route_view.start_loading()
         except Exception as e:
             logging.exception(e)
+        print('run_schedule end')
 
     def closeEvent(self, a0):
         self.stock.save()
         a0.accept()
 
-# 算交涉力
-# 接 auto sell
-# 接收入
+# 善用 networkx，路線相關的幾乎都能用吧?
 # 檢查演算法
-# 記錄歷史 exchange+island
+# 優化演算法
+
+
+# 已處理
+# 伊利 > 庭貝 > 奧眼得算一船負重
+# add item option會跳出來
+# 材料交換
+
+
+# 烏鴉幣 突發交換
+# normal 數量input
+# 刪除交換
+# 清除交換
+
+
+# 輸入剩餘 swap cost
+# 沒交換玩繼續交換 (route view勾勾自動更新middle)
+
+# 一趟島順序順了沒?
+
+
 # 看要不要加stock不足排除路線
 # UI 醜死了
-# 存 json
+# schedule 中要不能操作

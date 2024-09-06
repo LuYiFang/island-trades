@@ -56,6 +56,19 @@ class Scheduler(Save):
             exchange.priority += self.scale_to_range(- self.stock[exchange.target], -stock_min, -stock_max)
             exchange.priority += self.scale_to_range(exchange.price, 2000000, 7500000)
 
+    def count_version(self, filename):
+        version = 1
+        for f in os.listdir(self.folder):
+            f.startswith(filename)
+            match = re.search(r'_v(\d+)', f)
+            if not match:
+                continue
+
+            _version = int(match.group(1))
+            if _version > version:
+                version = _version
+        return version
+
     def save(self, *args):
         for target_name in args:
             target = self.__dict__.get(target_name)
@@ -64,18 +77,16 @@ class Scheduler(Save):
 
             date = datetime.today().strftime('%Y%m%d')
             filename = f'{self.__class__.__name__}_{target_name}_{date}_v{{}}'
-            version = 1
-            for f in os.listdir(self.folder):
-                f.startswith(filename)
-                match = re.search(r'_v(\d+)', f)
-                if not match:
-                    continue
-
-                _version = int(match.group(1))
-                if _version > version:
-                    version = _version
+            version = self.count_version(filename)
 
             self.save_json(filename.format(version + 1), target)
+
+    def save_exchanges_remain(self, data):
+        date = datetime.today().strftime('%Y%m%d')
+        filename = f'{self.__class__.__name__}_exchanges_remain_{date}_v{{}}'
+        version = self.count_version(filename)
+
+        self.save_json(filename.format(version + 1), data)
 
     def get_swap_cost(self):
         return min(self.exchanges.values(), key=lambda x: x.swap_cost).swap_cost
@@ -86,29 +97,29 @@ class Scheduler(Save):
 
         best_routes = []
         try:
+            # 伊利亞
             start_island_exchange = self.exchanges.get(self.start_island)
             if start_island_exchange:
+                available_stock = self.stock.count_available_stock(start_island_exchange)
                 max_trades = start_island_exchange.count_max_allowable_trades(
-                    self.ship_load_capacity,
-                    self.stock[start_island_exchange.source],
-                    self.stock.reserved_quantity[start_island_exchange.source],
+                    100000000,
+                    available_stock,
                     self.total_swap_cost
                 )
                 route_exchanges = self.execute_exchange({self.start_island}, {self.start_island: max_trades})
                 best_routes.append(Route_tuple(f'{self.start_island}', route_exchanges))
 
+            # 伊利亞 - 貝村
             route_exchanges, remain_swap_cost = self.find_specify_route(self.start_island, '貝村',
                                                                         self.total_swap_cost)
             if route_exchanges:
                 best_routes.append(Route_tuple(f'{self.start_island} - 貝村', route_exchanges))
-            route_exchanges, remain_swap_cost = self.find_specify_route(self.start_island, '庭貝拉',
-                                                                        remain_swap_cost)
-            if route_exchanges:
-                best_routes.append(Route_tuple(f'{self.start_island} - 庭貝拉', route_exchanges))
+
+            # 伊利亞 - 澳眼
             route_exchanges, remain_swap_cost = self.find_specify_route(self.start_island, '澳眼',
                                                                         remain_swap_cost)
             if route_exchanges:
-                best_routes.append(Route_tuple(f'澳眼 - {self.start_island}', route_exchanges))
+                best_routes.append(Route_tuple(f'{self.start_island} - 澳眼', route_exchanges))
 
             first_island = list(self.exchanges.keys())[0]
             routes = self.find_best_routes(0, first_island, remain_swap_cost)
@@ -192,10 +203,10 @@ class Scheduler(Save):
             if not self.island_graph.is_island_valid(exchange.island, visited):
                 continue
 
+            available_stock = self.stock.count_available_stock(exchange)
             max_allowable_trades = exchange.count_max_allowable_trades(
                 self.ship_load_capacity - current_weight,
-                self.stock[exchange.source],
-                self.stock.reserved_quantity[exchange.source],
+                available_stock,
                 current_swap_cost
             )
 
@@ -231,26 +242,9 @@ class Scheduler(Save):
 
         return max_value, best_route, best_island_trades, best_remain_swap_cost
 
-        total_swap_cost = 1000000
-        min_swap_cost = 11280
-        best_routes = []
-
-        def find_best_routes(island, swap_cost):
-            if swap_cost < min_swap_cost:
-                return
-            _, route, island_trades, remain_swap_cost = dp((
-                island,
-                0,
-                swap_cost,
-                self.graph[island].priority,
-            ),
-                set(),
-                {}
-            )
     def execute_exchange(self, route, island_trades):
         route_exchanges = []
-        for island in sorted(route, key=lambda x: self.island_graph.calculate_distance_with_start_island(x)):
-            print('island', island)
+        for island in self.island_graph.find_best_path(list(route)):
             trades = island_trades[island]
             exchange = self.exchanges[island]
             self.stock.execute_exchange(exchange, trades)
