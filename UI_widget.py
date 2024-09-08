@@ -9,15 +9,14 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QFileDialog, QScr
 
 
 class FileChooser(QWidget):
-    def __init__(self, upload_exchange_signal):
+    def __init__(self, title, upload_exchange_signal):
         super().__init__()
 
         self.upload_exchange_signal = upload_exchange_signal
-        self.setWindowTitle('File Chooser Example')
 
         layout = QVBoxLayout()
 
-        self.button = QPushButton('Open Exchanges File', self)
+        self.button = QPushButton(title, self)
         self.button.clicked.connect(self.show_dialog)
         layout.addWidget(self.button)
 
@@ -60,15 +59,52 @@ class PlotDrawer(QWidget):
 class Worker(QThread):
     finished = pyqtSignal(list)
 
-    def __init__(self, exchanges, exchange_graph):
+    def __init__(self, exchanges, schedule):
         super(Worker, self).__init__()
         self.exchanges = exchanges
-        self.exchange_graph = exchange_graph
+        self.schedule = schedule
 
     def run(self):
-        self.exchange_graph.add_trade(self.exchanges)
-        routes = self.exchange_graph.schedule_routes()
-        self.finished.emit(routes)
+        try:
+            self.schedule.add_trade(self.exchanges)
+            routes = self.schedule.schedule_routes()
+            self.finished.emit(routes)
+        except Exception as e:
+            logging.exception(e)
+
+
+# class FoldableWidget(QWidget):
+#     def __init__(self):
+#         super().__init__()
+#
+#         self.layout = QVBoxLayout()
+#
+#         self.toggle_button = QToolButton(checkable=True, checked=True)
+#         self.toggle_button.setStyleSheet("QToolButton { border: none; }")
+#         self.toggle_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+#         self.toggle_button.setArrowType(Qt.RightArrow)
+#         self.toggle_button.clicked.connect(self.toggle_content)
+#
+#         self.content_area = QFrame()
+#         self.content_area.setLayout(QVBoxLayout())
+#         self.content_area.setVisible(True)
+#
+#         self.layout.addWidget(self.toggle_button)
+#         self.layout.addWidget(self.content_area)
+#         self.setLayout(self.layout)
+#
+#     def toggle_content(self):
+#         if self.toggle_button.isChecked():
+#             self.toggle_button.setArrowType(Qt.DownArrow)
+#             self.content_area.setVisible(True)
+#         else:
+#             self.toggle_button.setArrowType(Qt.RightArrow)
+#             self.content_area.setVisible(False)
+#         self.updateGeometry()
+#
+#     def add_widget_to_foldable(self, widget):
+#         self.content_area.layout().addWidget(widget)
+
 
 
 class ScrollableWidget(QWidget):
@@ -154,9 +190,9 @@ class ItemGroup(QWidget):
 
         try:
 
-            island, source, target, ratio = None, None, None, None
+            island, source, target, ratio, swap_cost, self.remain_trades = None, None, None, None, None, None
             if default_values:
-                island, source, target, ratio = default_values
+                island, source, target, ratio, swap_cost, self.remain_trades = default_values
 
             self.island_combobox = QComboBox()
             self.island_combobox.setEditable(True)
@@ -179,7 +215,9 @@ class ItemGroup(QWidget):
 
             self.swap_cost_input = QSpinBox()
             self.swap_cost_input.setRange(0, 100000)
-            self.swap_cost_input.setValue(11485)
+            self.swap_cost_input.setValue(11220)
+            if swap_cost is not None:
+                self.ratio_input.setValue(swap_cost)
 
             layout.addWidget(self.island_combobox, 2)
             layout.addWidget(self.item_combobox_source, 3)

@@ -22,6 +22,8 @@ class Scheduler(Save):
         self.min_swap_cost = None
         self.total_swap_cost = 1000000
 
+        self.checked_stations = {}
+
     def add_trade(self, exchanges: dict):
         self.save_exchanges = {}
         self.exchanges = {}
@@ -38,6 +40,7 @@ class Scheduler(Save):
                 'source': args[0],
                 'target': args[1],
                 'ratio': args[2],
+                'swap_cost': args[3],
             }
         self.count_priority()
         self.min_swap_cost = self.get_swap_cost()
@@ -81,12 +84,40 @@ class Scheduler(Save):
 
             self.save_json(filename.format(version + 1), target)
 
-    def save_exchanges_remain(self, data):
+    def save_exchanges_remain(self):
+        exchanges_remain = {}
+        for island, exchange in self.exchanges.items():
+            checked_station = self.checked_stations.get(island)
+            remain_trades = exchange.remain_exchange
+            if checked_station:
+                remain_trades = exchange.remain_exchange - checked_station.trades
+
+            if remain_trades <= 0:
+                continue
+
+            exchanges_remain[island] = {
+                'source': exchange.source,
+                'target': exchange.target,
+                'ratio': exchange.ratio,
+                'swap_cost': exchange.swap_cost,
+                'remain_trades': remain_trades,
+            }
+
         date = datetime.today().strftime('%Y%m%d')
         filename = f'{self.__class__.__name__}_exchanges_remain_{date}_v{{}}'
         version = self.count_version(filename)
 
-        self.save_json(filename.format(version + 1), data)
+        self.save_json(filename.format(version + 1), exchanges_remain)
+
+    def execute_exchange(self, exchange: Exchange, trades, route_id=None):
+        self.stock.execute_exchange(exchange, trades, route_id)
+
+        self.checked_stations[exchange.island] = Station_tuple(exchange, trades)
+
+    def undo_execute_exchange(self, exchange: Exchange, trades, route_id=None):
+        self.stock.undo_execute_exchange(exchange, trades, route_id)
+
+        del self.checked_stations[exchange.island]
 
     def get_swap_cost(self):
         return min(self.exchanges.values(), key=lambda x: x.swap_cost).swap_cost

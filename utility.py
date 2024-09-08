@@ -50,8 +50,8 @@ class Save:
 class Exchange:
     def __init__(
             self,
-            island, source, target, ratio,
-            swap_cost=11485, level=None, weight=0, priority=1,
+            island, source, target, ratio, swap_cost=11220, remain_exchange=None,
+            level=None, weight=0, priority=1,
             source_img='', target_img='',
     ):
         self.island = island
@@ -71,7 +71,7 @@ class Exchange:
             self.maximum_exchange = 6
 
         self.trades = 1000
-        self.remain_exchange = self.maximum_exchange
+        self.remain_exchange = self.maximum_exchange if remain_exchange is None else remain_exchange
 
         self.price = self.get_price()
 

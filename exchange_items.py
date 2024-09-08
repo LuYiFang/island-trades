@@ -122,7 +122,8 @@ island_position = {
 
     '貝村': (-10, -11),
     '艾港': (-32, -15),
-    '澳眼': (-5, 20),
+    '澳眼': (-12, 20),
 }
 
 default_ship_load_capacity = 10891
+default_remain_swap_cost = 1000000

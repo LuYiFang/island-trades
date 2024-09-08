@@ -52,7 +52,7 @@ class StockWidget(ScrollableWidget):
                 quantity_input.setRange(0, 1000)
                 quantity_input.setValue(item_count)
 
-                quantity_count = self.stock.reserved_quantity[item['name']]
+                quantity_count = self.stock.reserved_quantity.get(item['name'], 0)
                 reserved_label = QLabel('Res.')
                 reserved_quantity_input = QSpinBox()
                 reserved_quantity_input.setRange(0, 1000)
@@ -83,8 +83,8 @@ class StockWidget(ScrollableWidget):
                 hbox_layout.addWidget(label_image)
                 hbox_layout.addLayout(vbox_layout)
 
-                row = item_index // 8
-                col = item_index % 8
+                row = item_index // 3
+                col = item_index % 3
 
                 grid_layout.addLayout(hbox_layout, row, col)
 

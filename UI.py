@@ -26,28 +26,29 @@ class MainWindow(QWidget):
         self.stock = stock
         self.island_graph = island_graph
         self.islands = sorted(list(island_graph.island_group_map.keys()))
-        self.exchange_graph = Scheduler(self.stock, self.island_graph)
+        self.schedule = Scheduler(self.stock, self.island_graph)
 
         self.set_font()
         self.set_theme()
 
         main_layout = QHBoxLayout(self)
 
-        self.top_view = TopWidget(self.stock, self.exchange_graph)
+        self.top_view = TopWidget(self.stock, self.schedule)
         self.submit_button = QPushButton("Submit")
         self.middle_view = MiddleWidget(self.islands, self.stock)
         self.route_view = RouteViewWidget(self.stock, self.stock_update_signal, self.income_update_signal)
         self.save_exchange_button = QPushButton("Save Exchange")
+        self.save_remain_exchange_button = QPushButton("Save Remain Exchange")
         left_layout = self.add_left_area()
 
         self.stock_view = StockWidget(self.stock)
         right_layout = self.add_stock_view()
 
         main_layout.addLayout(left_layout, 1)
-        main_layout.addLayout(right_layout, 2)
+        main_layout.addLayout(right_layout, 1)
 
         self.setWindowTitle("Island Trade")
-        self.resize(1800, 900)
+        self.resize(1200, 900)
 
         self.submit_button.clicked.connect(self.run_schedule)
         self.save_exchange_button.clicked.connect(self.save_exchange)
@@ -63,15 +64,16 @@ class MainWindow(QWidget):
         self.setLayout(left_layout)
 
         left_layout.addWidget(self.top_view, 1)
+
+        left_layout.addWidget(FileChooser('Open Exchanges File', self.upload_exchange_signal))
+
         left_layout.addWidget(self.middle_view, 2)
 
-        left_layout.addWidget(self.submit_button)
-
-        import_export_layout = QHBoxLayout()
-        self.setLayout(import_export_layout)
-        import_export_layout.addWidget(FileChooser(self.upload_exchange_signal))
-        import_export_layout.addWidget(self.save_exchange_button)
-        left_layout.addLayout(import_export_layout)
+        action_layout = QHBoxLayout()
+        action_layout.addWidget(self.save_exchange_button)
+        action_layout.addWidget(self.save_remain_exchange_button)
+        action_layout.addWidget(self.submit_button)
+        left_layout.addLayout(action_layout)
 
         left_layout.addWidget(self.route_view, 2)
         return left_layout
@@ -102,24 +104,7 @@ class MainWindow(QWidget):
                 """)
 
     def save_exchange(self):
-        self.exchange_graph.save('save_exchanges')
-
-    def save_remain_exchange(self):
-        remain_exchanges = defaultdict(list)
-        station_index = 0
-        for group_name, route in self.route_view.routes:
-            for exchange, trades in route:
-                if self.route_view.station_list[station_index].check_box.isChecked():
-                    continue
-                remain_exchanges[group_name].append({
-                    'island': exchange.island,
-                    'source': exchange.source,
-                    'target': exchange.target,
-                    'trades': trades,
-                })
-
-                station_index += 1
-        self.exchange_graph.save_exchanges_remain(remain_exchanges)
+        self.schedule.save('save_exchanges')
 
     def run_schedule(self):
         print('run_schedule')
@@ -131,9 +116,9 @@ class MainWindow(QWidget):
                 target = group.item_combobox_target.currentText()
                 quantity = group.ratio_input.value()
                 swap_cost = group.swap_cost_input.value()
-                exchanges[island] = (source, target, quantity, swap_cost)
+                exchanges[island] = (source, target, quantity, swap_cost, group.remain_trades)
 
-            self.worker = Worker(exchanges, self.exchange_graph)
+            self.worker = Worker(exchanges, self.schedule)
             self.worker.finished.connect(self.submit_button_signal.emit)
             self.worker.start()
             self.route_view.start_loading()

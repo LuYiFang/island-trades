@@ -9,6 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from exchange_items import island_position
 
 import networkx as nx
+import networkx.algorithms.approximation as nx_app
 import matplotlib.pyplot as plt
 
 from utility import Save
@@ -247,12 +248,19 @@ class IslandGraph(Save):
     def find_best_path(self, islands):
         if len(islands) <= 1:
             return islands
-        source = min(islands, key=lambda x: self.calculate_distance_with_start_island(x))
-        target = max(islands, key=lambda x: self.calculate_distance_with_start_island(x))
+
+        islands = set(islands)
+        islands.add(self.start_island)
+
         nx_graph = nx.Graph()
         for island in islands:
             for neighbor in islands:
+                if island == neighbor:
+                    continue
+
                 nx_graph.add_edge(island, neighbor, weight=self.calculate_distance(island, neighbor))
 
         shortest_path = nx.dijkstra_path(nx_graph, source, target)
+        shortest_path = nx_app.traveling_salesman_problem(nx_graph, cycle=False, method=nx_app.christofides)
+        shortest_path.remove(self.start_island)
         return shortest_path

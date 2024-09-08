@@ -6,20 +6,21 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox,
     QPushButton, QCheckBox, QSpacerItem, QGroupBox
 
 from UI_widget import ScrollableWidget, ItemGroup, Station, PlotDrawer
-from exchange_items import default_ship_load_capacity
+from exchange_items import default_ship_load_capacity, default_remain_swap_cost
 from utility import read_json
 
 
 class TopWidget(QWidget):
     add_item_signal = QtCore.pyqtSignal(str, object)
 
-    def __init__(self, stock, exchange_graph):
+    def __init__(self, stock, schedule):
         super().__init__()
 
         self.stock = stock
-        self.exchange_graph = exchange_graph
+        self.schedule = schedule
 
         self.load_input = None
+        self.swap_cost_input = None
         self.checkbox = None
         self.add_button = None
         self.level_combobox = None
@@ -29,16 +30,16 @@ class TopWidget(QWidget):
 
         self.add_island_graph()
         self.add_load_layout()
+        self.add_remain_swap_cost_layout()
         self.add_new_item_layout()
         self.add_auto_sell_layout()
-        self.add_income_layout()
         self.setLayout(self.layout)
 
     def add_island_graph(self):
         layout = QHBoxLayout(self)
-        island_graph = PlotDrawer('Island Graph', self.exchange_graph.island_graph)
-        island_group = PlotDrawer('Island Group', self.exchange_graph.island_graph)
-        group_graph = PlotDrawer('Group Graph', self.exchange_graph.island_graph)
+        island_graph = PlotDrawer('Island Graph', self.schedule.island_graph)
+        island_group = PlotDrawer('Island Group', self.schedule.island_graph)
+        group_graph = PlotDrawer('Group Graph', self.schedule.island_graph)
         layout.addWidget(island_graph)
         layout.addWidget(island_group)
         layout.addWidget(group_graph)
@@ -60,6 +61,23 @@ class TopWidget(QWidget):
         load_layout.addWidget(self.load_input)
 
         self.layout.addLayout(load_layout)
+
+    def add_remain_swap_cost_layout(self):
+        swap_cost_layout = QHBoxLayout(self)
+        swap_cost_label = QLabel('Remain swap cost: ')
+        self.swap_cost_input = QSpinBox()
+        self.swap_cost_input.setRange(0, 1000000)
+        self.swap_cost_input.setValue(default_remain_swap_cost)
+
+        self.swap_cost_input.valueChanged.connect(self.on_swap_cost_value_changed)
+
+        swap_cost_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.swap_cost_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        swap_cost_layout.addWidget(swap_cost_label)
+        swap_cost_layout.addWidget(self.swap_cost_input)
+
+        self.layout.addLayout(swap_cost_layout)
 
     def add_new_item_layout(self):
         new_item_layout = QHBoxLayout(self)
@@ -85,6 +103,7 @@ class TopWidget(QWidget):
     def add_auto_sell_layout(self):
         check_layout = QHBoxLayout(self)
         self.checkbox = QCheckBox()
+        self.checkbox.setChecked(True)
         label = QLabel('Auto Sell')
         self.checkbox.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -93,19 +112,15 @@ class TopWidget(QWidget):
         check_layout.addItem(spacer)
         check_layout.addWidget(label)
 
-        self.checkbox.stateChanged.connect(self.on_checkbox_changed)
-        self.layout.addLayout(check_layout)
-
-    def add_income_layout(self):
-        sell_layout = QHBoxLayout()
         income_label = QLabel('收入: ')
         self.income_count_label = QLabel('')
-        sell_layout.addWidget(income_label)
-        sell_layout.addWidget(self.income_count_label)
+        check_layout.addWidget(income_label)
+        check_layout.addWidget(self.income_count_label)
         income_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.income_count_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        self.layout.addLayout(sell_layout)
+        self.checkbox.stateChanged.connect(self.on_checkbox_changed)
+        self.layout.addLayout(check_layout)
 
     def add_item(self):
         level = self.level_combobox.currentText().replace('level_', '')
@@ -125,7 +140,10 @@ class TopWidget(QWidget):
             self.stock.switch_auto_sell(True)
 
     def on_load_value_changed(self):
-        self.exchange_graph.ship_load_capacity = self.load_input.value()
+        self.schedule.ship_load_capacity = self.load_input.value()
+
+    def on_swap_cost_value_changed(self):
+        self.schedule.total_swap_cost = self.load_input.value()
 
     def update_income(self, income):
         self.income_count_label.setText(f'{income:,}')
@@ -161,16 +179,22 @@ class MiddleWidget(ScrollableWidget):
     def button_add_item_group(self):
         self.add_item_group()
 
-    def add_item_group(self, island=None, source=None, target=None, ratio=None):
-        group = ItemGroup(self.islands, self.stock, island, source, target, ratio)
+    def add_item_group(self, island=None, source=None, target=None, ratio=None, swap_cost=None, remain_trades=None):
+        group = ItemGroup(self.islands, self.stock, island, source, target, ratio, swap_cost, remain_trades)
         self.item_groups.append(group)
         self.add_widget_to_scroll(group)
         return group
 
     def add_item_by_file(self, filename):
-        data = read_json(filename)
-        for i, (island, info) in enumerate(data.items()):
-            self.add_item_group(island, info['source'], info['target'], info['ratio'])
+        try:
+            data = read_json(filename)
+            for i, (island, info) in enumerate(data.items()):
+                self.add_item_group(
+                    island, info['source'], info['target'], info['ratio'],
+                    info['swap_cost'], info.get('remain_trades')
+                )
+        except Exception as e:
+            logging.exception(e)
 
     def update_item_options(self, item, level):
         try:
@@ -242,3 +266,8 @@ class RouteViewWidget(ScrollableWidget):
             if route is not None:
                 route.deleteLater()
         self.station_list = []
+
+    def add_route_by_file(self, filename):
+        data = read_json(filename)
+        for i, (island, info) in enumerate(data.items()):
+            self.add_item_group(island, info['source'], info['target'], info['ratio'])
