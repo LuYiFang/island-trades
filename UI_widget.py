@@ -2,7 +2,7 @@ import logging
 import re
 
 from PyQt5 import QtCore
-from PyQt5.QtCore import QThread, pyqtSignal, Qt
+from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PyQt5.QtGui import QColor, QPixmap
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QFileDialog, QScrollArea, QComboBox, QHBoxLayout, \
     QSpinBox, QLabel, QCheckBox
@@ -104,7 +104,6 @@ class Worker(QThread):
 #
 #     def add_widget_to_foldable(self, widget):
 #         self.content_area.layout().addWidget(widget)
-
 
 
 class ScrollableWidget(QWidget):
@@ -258,9 +257,17 @@ class ItemGroup(QWidget):
             count += len(items)
             break
         self.item_combobox_target.showPopup()
-        self.item_combobox_target.view().scrollTo(
-            self.item_combobox_target.model().index(count + visible_items_count - 1, 0)
-        )
+
+        def check_and_scroll():
+            print('visible', self.item_combobox_target.view().isVisible())
+            if self.item_combobox_target.view().isVisible():
+                self.item_combobox_target.view().scrollTo(
+                    self.item_combobox_target.model().index(count + visible_items_count - 1, 0)
+                )
+                return
+            QTimer.singleShot(100, check_and_scroll)
+
+        check_and_scroll()
 
 
 class Station(QWidget):
@@ -293,10 +300,10 @@ class Station(QWidget):
         layout.addWidget(QLabel(exchange.island))
         layout.addWidget(label_a)
         layout.addWidget(QLabel(exchange.source))
+        layout.addWidget(QLabel(f": {num}"))
         layout.addWidget(QLabel(" -> "))
         layout.addWidget(label_b)
         layout.addWidget(QLabel(exchange.target))
-        layout.addWidget(QLabel(f": {num}"))
         self.setLayout(layout)
 
     def on_checkbox_changed(self, state):
