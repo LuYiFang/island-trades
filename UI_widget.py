@@ -5,7 +5,9 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PyQt5.QtGui import QColor, QPixmap
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QFileDialog, QScrollArea, QComboBox, QHBoxLayout, \
-    QSpinBox, QLabel, QCheckBox
+    QSpinBox, QLabel, QCheckBox, QToolButton, QFrame, QSizePolicy
+
+from Scheduler import Scheduler
 
 
 class FileChooser(QWidget):
@@ -73,39 +75,6 @@ class Worker(QThread):
             logging.exception(e)
 
 
-# class FoldableWidget(QWidget):
-#     def __init__(self):
-#         super().__init__()
-#
-#         self.layout = QVBoxLayout()
-#
-#         self.toggle_button = QToolButton(checkable=True, checked=True)
-#         self.toggle_button.setStyleSheet("QToolButton { border: none; }")
-#         self.toggle_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-#         self.toggle_button.setArrowType(Qt.RightArrow)
-#         self.toggle_button.clicked.connect(self.toggle_content)
-#
-#         self.content_area = QFrame()
-#         self.content_area.setLayout(QVBoxLayout())
-#         self.content_area.setVisible(True)
-#
-#         self.layout.addWidget(self.toggle_button)
-#         self.layout.addWidget(self.content_area)
-#         self.setLayout(self.layout)
-#
-#     def toggle_content(self):
-#         if self.toggle_button.isChecked():
-#             self.toggle_button.setArrowType(Qt.DownArrow)
-#             self.content_area.setVisible(True)
-#         else:
-#             self.toggle_button.setArrowType(Qt.RightArrow)
-#             self.content_area.setVisible(False)
-#         self.updateGeometry()
-#
-#     def add_widget_to_foldable(self, widget):
-#         self.content_area.layout().addWidget(widget)
-
-
 class ScrollableWidget(QWidget):
     def __init__(self):
         super(ScrollableWidget, self).__init__()
@@ -120,6 +89,8 @@ class ScrollableWidget(QWidget):
 
         main_layout = QVBoxLayout(self)
         main_layout.addWidget(self.scroll_area)
+
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
         self.setLayout(main_layout)
 
@@ -271,10 +242,11 @@ class ItemGroup(QWidget):
 
 
 class Station(QWidget):
-    def __init__(self, exchange, num, stock, stock_update_signal, income_update_signal):
+    def __init__(self, exchange, num, stock, schedule: Scheduler, stock_update_signal, income_update_signal):
         super(Station, self).__init__()
 
         self.stock = stock
+        self.schedule = schedule
         self.exchange = exchange
         self.trades = num
         self.stock_update_signal = stock_update_signal
@@ -309,10 +281,64 @@ class Station(QWidget):
     def on_checkbox_changed(self, state):
         self.stock.switch_stock(False)
 
-        if state == Qt.Unchecked:
-            self.stock.undo_execute_exchange(self.exchange, self.trades, id(self))
-        else:
-            self.stock.execute_exchange(self.exchange, self.trades, id(self))
+        try:
+            print('self.schedule', self.schedule.execute_exchange)
+            if state == Qt.Unchecked:
+                self.schedule.undo_execute_exchange(self.exchange, self.trades, id(self))
+            else:
+                print('arg', self.exchange, self.trades, id(self))
+                self.schedule.execute_exchange(self.exchange, self.trades, id(self))
 
-        self.stock_update_signal.emit([self.exchange.source, self.exchange.target])
-        self.income_update_signal.emit(self.stock.count_income())
+            self.stock_update_signal.emit([self.exchange.source, self.exchange.target])
+            self.income_update_signal.emit(self.stock.count_income())
+
+        except Exception as e:
+            logging.exception(e)
+
+
+class CollapsibleSection(QWidget):
+    def __init__(self, is_open=True):
+        super().__init__()
+        self.layout = QVBoxLayout()
+
+        self.toggle_button = QToolButton(checkable=True, checked=True)
+        self.toggle_button.setStyleSheet("QToolButton { border: none; }")
+        self.toggle_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.toggle_button.clicked.connect(self.toggle_content)
+        self.toggle_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.toggle_button.setContentsMargins(0, 0, 0, 0)
+
+        self.content_frame = QFrame()
+        self.content_frame.setContentsMargins(0, 0, 0, 0)
+        self.content_frame_layout = QVBoxLayout()
+        self.content_frame_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.layout.addWidget(self.toggle_button, alignment=Qt.AlignTop | Qt.AlignLeft)
+
+        self.content_frame.setLayout(self.content_frame_layout)
+        self.layout.addWidget(self.content_frame)
+
+        self.layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.layout.setSpacing(0)
+        self.setLayout(self.layout)
+
+        if is_open:
+            self.content_frame.show()
+            self.toggle_button.setArrowType(Qt.DownArrow)
+        else:
+            self.toggle_button.setArrowType(Qt.RightArrow)
+            self.content_frame.hide()
+
+    def toggle_content(self):
+        self.switch_content(self.toggle_button.isChecked())
+
+    def switch_content(self, is_open):
+        if is_open:
+            self.toggle_button.setArrowType(Qt.DownArrow)
+            self.content_frame.show()
+        else:
+            self.toggle_button.setArrowType(Qt.RightArrow)
+            self.content_frame.hide()
+
+    def add_widget(self, widget, *args):
+        self.content_frame_layout.addWidget(widget, *args)

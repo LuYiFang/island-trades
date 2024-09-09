@@ -1,5 +1,6 @@
 import heapq
 import logging
+import sys
 from collections import defaultdict
 
 import numpy as np
@@ -247,6 +248,9 @@ class IslandGraph(Save):
 
     def find_best_path(self, islands):
         if len(islands) <= 1:
+            return islands
+
+        if sys.version_info.major < 3 or sys.version_info.minor <= 6:
             return islands
 
         islands = set(islands)

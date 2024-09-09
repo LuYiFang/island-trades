@@ -69,6 +69,8 @@ class Exchange:
 
         if self.level == 5:
             self.maximum_exchange = 6
+        elif self.level == 'material':
+            self.maximum_exchange = 2
 
         self.trades = 1000
         self.remain_exchange = self.maximum_exchange if remain_exchange is None else remain_exchange

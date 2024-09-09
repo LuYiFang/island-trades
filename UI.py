@@ -2,16 +2,17 @@ import logging
 from collections import defaultdict
 
 from PyQt5 import QtCore
+from PyQt5.QtCore import Qt
 
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
+    QApplication, QWidget, QVBoxLayout, QPushButton, QHBoxLayout, QSplitter, QFrame, QSizePolicy,
 )
 
 from Scheduler import Scheduler
 from UI_schedule import TopWidget, MiddleWidget, RouteViewWidget
 from UI_stock import StockWidget
-from UI_widget import FileChooser, Worker
+from UI_widget import FileChooser, Worker, CollapsibleSection
 
 
 class MainWindow(QWidget):
@@ -19,6 +20,7 @@ class MainWindow(QWidget):
     stock_update_signal = QtCore.pyqtSignal(list)
     income_update_signal = QtCore.pyqtSignal(int)
     upload_exchange_signal = QtCore.pyqtSignal(str)
+    upload_total_swap_cost_signal = QtCore.pyqtSignal(int)
 
     def __init__(self, island_graph, stock):
         super(MainWindow, self).__init__()
@@ -33,10 +35,15 @@ class MainWindow(QWidget):
 
         main_layout = QHBoxLayout(self)
 
+        self.section_middle = CollapsibleSection()
+        self.section_route_view = CollapsibleSection(False)
+
         self.top_view = TopWidget(self.stock, self.schedule)
+        self.clean_button = QPushButton("Clean")
         self.submit_button = QPushButton("Submit")
-        self.middle_view = MiddleWidget(self.islands, self.stock)
-        self.route_view = RouteViewWidget(self.stock, self.stock_update_signal, self.income_update_signal)
+        self.middle_view = MiddleWidget(self.islands, self.stock, self.upload_total_swap_cost_signal)
+        self.route_view = RouteViewWidget(self.stock, self.schedule, self.stock_update_signal,
+                                          self.income_update_signal)
         self.save_exchange_button = QPushButton("Save Exchange")
         self.save_remain_exchange_button = QPushButton("Save Remain Exchange")
         left_layout = self.add_left_area()
@@ -50,14 +57,17 @@ class MainWindow(QWidget):
         self.setWindowTitle("Island Trade")
         self.resize(1200, 900)
 
+        self.clean_button.clicked.connect(self.middle_view.clean_view)
         self.submit_button.clicked.connect(self.run_schedule)
         self.save_exchange_button.clicked.connect(self.save_exchange)
+        self.save_remain_exchange_button.clicked.connect(self.schedule.save_exchanges_remain)
 
         self.submit_button_signal.connect(self.route_view.update_routes)
         self.stock_update_signal.connect(self.stock_view.update_items)
         self.income_update_signal.connect(self.top_view.update_income)
         self.top_view.add_item_signal.connect(self.middle_view.update_item_options)
         self.upload_exchange_signal.connect(self.middle_view.add_item_by_file)
+        self.upload_total_swap_cost_signal.connect(self.top_view.update_total_swap_cost)
 
     def add_left_area(self):
         left_layout = QVBoxLayout(self)
@@ -65,17 +75,27 @@ class MainWindow(QWidget):
 
         left_layout.addWidget(self.top_view, 1)
 
-        left_layout.addWidget(FileChooser('Open Exchanges File', self.upload_exchange_signal))
-
-        left_layout.addWidget(self.middle_view, 2)
+        upload_layout = QHBoxLayout()
+        upload_layout.addWidget(FileChooser('Open Exchanges File', self.upload_exchange_signal))
+        upload_layout.addWidget(self.clean_button)
+        left_layout.addLayout(upload_layout)
 
         action_layout = QHBoxLayout()
         action_layout.addWidget(self.save_exchange_button)
         action_layout.addWidget(self.save_remain_exchange_button)
         action_layout.addWidget(self.submit_button)
+
+        self.section_middle.add_widget(self.middle_view)
+        self.section_route_view.add_widget(self.route_view)
+        left_layout.addWidget(self.section_middle)
+
         left_layout.addLayout(action_layout)
 
-        left_layout.addWidget(self.route_view, 2)
+        left_layout.addWidget(self.section_route_view)
+
+        self.top_view.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        left_layout.setAlignment(Qt.AlignTop)
+
         return left_layout
 
     def add_stock_view(self):
@@ -108,6 +128,8 @@ class MainWindow(QWidget):
 
     def run_schedule(self):
         print('run_schedule')
+        self.section_middle.switch_content(False)
+        self.section_route_view.switch_content(True)
         try:
             exchanges = {}
             for group in self.middle_view.item_groups:

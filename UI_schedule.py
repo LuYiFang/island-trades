@@ -145,16 +145,20 @@ class TopWidget(QWidget):
     def on_swap_cost_value_changed(self):
         self.schedule.total_swap_cost = self.load_input.value()
 
+    def update_total_swap_cost(self, remain_swap_cost):
+        self.swap_cost_input.setValue(remain_swap_cost)
+
     def update_income(self, income):
         self.income_count_label.setText(f'{income:,}')
 
 
 class MiddleWidget(ScrollableWidget):
-    def __init__(self, islands, stock):
+    def __init__(self, islands, stock, upload_total_swap_cost_signal):
         super(MiddleWidget, self).__init__()
 
         self.islands = islands
         self.stock = stock
+        self.upload_total_swap_cost_signal = upload_total_swap_cost_signal
         self.item_groups = []
 
         self.add_item_button = QPushButton("+")
@@ -187,7 +191,13 @@ class MiddleWidget(ScrollableWidget):
 
     def add_item_by_file(self, filename):
         try:
+            self.clean_view()
+
             data = read_json(filename)
+            if 'remain_swap_cost' in data:
+                remain_swap_cost = data.pop('remain_swap_cost')
+                self.upload_total_swap_cost_signal.emit(remain_swap_cost)
+
             for i, (island, info) in enumerate(data.items()):
                 self.add_item_group(
                     island, info['source'], info['target'], info['ratio'],
@@ -204,12 +214,19 @@ class MiddleWidget(ScrollableWidget):
         except Exception as e:
             logging.exception(e)
 
+    def clean_view(self):
+        for item in self.item_groups:
+            if item is not None:
+                item.deleteLater()
+        self.item_groups = []
+
 
 class RouteViewWidget(ScrollableWidget):
-    def __init__(self, stock, stock_update_signal, income_update_signal):
+    def __init__(self, stock, schedule, stock_update_signal, income_update_signal):
         super().__init__()
 
         self.stock = stock
+        self.schedule = schedule
         self.stock_update_signal = stock_update_signal
         self.income_update_signal = income_update_signal
 
@@ -246,6 +263,7 @@ class RouteViewWidget(ScrollableWidget):
                     exchange,
                     trades,
                     self.stock,
+                    self.schedule,
                     self.stock_update_signal,
                     self.income_update_signal
                 )
