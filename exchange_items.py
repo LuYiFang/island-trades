@@ -125,5 +125,5 @@ island_position = {
     '澳眼': (-12, 20),
 }
 
-default_ship_load_capacity = 10891
+default_ship_load_capacity = 12991
 default_remain_swap_cost = 1000000

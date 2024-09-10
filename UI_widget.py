@@ -103,6 +103,10 @@ class ScrollableWidget(QWidget):
     def add_layout_to_scroll(self, layout):
         self.content_widget.setLayout(layout)
 
+    def scroll_to_bottom(self):
+        scrollbar = self.scroll_area.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
 
 class ColorComboBox(QComboBox):
     color_changed = QtCore.pyqtSignal(list)
@@ -230,7 +234,6 @@ class ItemGroup(QWidget):
         self.item_combobox_target.showPopup()
 
         def check_and_scroll():
-            print('visible', self.item_combobox_target.view().isVisible())
             if self.item_combobox_target.view().isVisible():
                 self.item_combobox_target.view().scrollTo(
                     self.item_combobox_target.model().index(count + visible_items_count - 1, 0)
@@ -282,11 +285,9 @@ class Station(QWidget):
         self.stock.switch_stock(False)
 
         try:
-            print('self.schedule', self.schedule.execute_exchange)
             if state == Qt.Unchecked:
                 self.schedule.undo_execute_exchange(self.exchange, self.trades, id(self))
             else:
-                print('arg', self.exchange, self.trades, id(self))
                 self.schedule.execute_exchange(self.exchange, self.trades, id(self))
 
             self.stock_update_signal.emit([self.exchange.source, self.exchange.target])

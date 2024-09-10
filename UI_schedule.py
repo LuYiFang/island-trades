@@ -1,7 +1,7 @@
 import logging
 
 from PyQt5 import QtCore
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QSizePolicy, QLineEdit, QComboBox, \
     QPushButton, QCheckBox, QSpacerItem, QGroupBox
 
@@ -161,9 +161,6 @@ class MiddleWidget(ScrollableWidget):
         self.upload_total_swap_cost_signal = upload_total_swap_cost_signal
         self.item_groups = []
 
-        self.add_item_button = QPushButton("+")
-        self.add_widget_to_scroll(self.add_item_button)
-
         header_layout = QHBoxLayout()
         header_layout.addWidget(QLabel('Island'), 2)
         header_layout.addWidget(QLabel('Source'), 3)
@@ -176,6 +173,9 @@ class MiddleWidget(ScrollableWidget):
         header_widget.setLayout(header_layout)
         self.add_widget_to_scroll(header_widget)
 
+        self.add_item_button = QPushButton("+")
+        self.add_widget_to_scroll(self.add_item_button)
+
         self.layout.setAlignment(Qt.AlignTop)
 
         self.add_item_button.clicked.connect(self.button_add_item_group)
@@ -185,8 +185,9 @@ class MiddleWidget(ScrollableWidget):
 
     def add_item_group(self, island=None, source=None, target=None, ratio=None, swap_cost=None, remain_trades=None):
         group = ItemGroup(self.islands, self.stock, island, source, target, ratio, swap_cost, remain_trades)
+        self.insert_widget_to_scroll(len(self.item_groups)+1, group)
         self.item_groups.append(group)
-        self.add_widget_to_scroll(group)
+        QTimer.singleShot(100, self.scroll_to_bottom)
         return group
 
     def add_item_by_file(self, filename):
