@@ -143,7 +143,7 @@ class TopWidget(QWidget):
         self.schedule.ship_load_capacity = self.load_input.value()
 
     def on_swap_cost_value_changed(self):
-        self.schedule.total_swap_cost = self.load_input.value()
+        self.schedule.total_swap_cost = self.swap_cost_input.value()
 
     def update_total_swap_cost(self, remain_swap_cost):
         self.swap_cost_input.setValue(remain_swap_cost)

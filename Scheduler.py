@@ -90,13 +90,10 @@ class Scheduler(Save):
         remain_swap_cost = self.total_swap_cost
         for island, exchange in self.exchanges.items():
             checked_station = self.checked_stations.get(island)
-            print('checked_station', checked_station)
-            remain_trades = exchange.remain_exchange
             if checked_station:
-                remain_trades = exchange.remain_exchange - checked_station.trades
                 remain_swap_cost -= checked_station.trades * exchange.swap_cost
 
-            if remain_trades <= 0:
+            if exchange.remain_exchange <= 0:
                 continue
 
             exchanges_remain[island] = {
@@ -104,7 +101,7 @@ class Scheduler(Save):
                 'target': exchange.target,
                 'ratio': exchange.ratio,
                 'swap_cost': exchange.swap_cost,
-                'remain_trades': remain_trades,
+                'remain_trades': exchange.remain_exchange,
             }
 
         exchanges_remain['remain_swap_cost'] = remain_swap_cost
@@ -128,11 +125,17 @@ class Scheduler(Save):
     def get_swap_cost(self):
         return min(self.exchanges.values(), key=lambda x: x.swap_cost).swap_cost
 
+    def reset_all_exchanges(self):
+        for exchange in self.exchanges.values():
+            exchange.reset_remain_exchange()
+        self.checked_stations = {}
+
     def schedule_routes(self):
         self.stock.restore()
         self.stock.switch_stock(True)
+        self.reset_all_exchanges()
 
-        print('schedule_routes')
+        remain_swap_cost = self.total_swap_cost
 
         best_routes = []
         try:
@@ -143,14 +146,14 @@ class Scheduler(Save):
                 max_trades = start_island_exchange.count_max_allowable_trades(
                     100000000,
                     available_stock,
-                    self.total_swap_cost
+                    remain_swap_cost
                 )
                 route_exchanges = self.virtual_execute_exchange({self.start_island}, {self.start_island: max_trades})
                 best_routes.append(Route_tuple(f'{self.start_island}', route_exchanges))
 
             # 伊利亞 - 貝村
             route_exchanges, remain_swap_cost = self.find_specify_route(self.start_island, '貝村',
-                                                                        self.total_swap_cost)
+                                                                        remain_swap_cost)
             if route_exchanges:
                 best_routes.append(Route_tuple(f'{self.start_island} - 貝村', route_exchanges))
 
@@ -164,12 +167,7 @@ class Scheduler(Save):
             routes = self.find_best_routes(0, first_island, remain_swap_cost)
             best_routes.extend(routes)
 
-            # print('best_routes')
-            # for _route in best_routes:
-            #     print('\ngroup', _route.name)
-            #     for r in _route.stations:
-            #         print(r.exchange.island, r.trades, end=' ')
-            # print('\nbest_routes end', type(best_routes))
+            self.reset_all_exchanges()
         except Exception as e:
             logging.exception(e)
         print('schedule_routes end')
@@ -229,15 +227,9 @@ class Scheduler(Save):
         current_island, current_weight, current_swap_cost, current_priority = state
 
         if current_weight > self.ship_load_capacity - 100 or current_swap_cost <= 0:
-            # print('current_weight1', current_weight, 'pr', current_priority)
-            # for v in visited:
-            #     print(v, island_trades[v])
             return current_priority, visited, island_trades, current_swap_cost
 
         if len(exchanges) == len(visited):
-            # print('current_weight2', current_weight, 'pr', current_priority)
-            # for v in visited:
-            #     print(v, island_trades[v])
             return current_priority, visited, island_trades, current_swap_cost
 
         max_value = -float('inf')
@@ -288,14 +280,8 @@ class Scheduler(Save):
                 best_remain_swap_cost = remain_swap_cost
 
         if all_exchange_zero:
-            # print('current_weight zero', current_weight, 'pr', current_priority)
-            # for v in visited:
-            #     print(v, island_trades[v])
             return current_priority, visited, island_trades, current_swap_cost
 
-        # print('current_weight best', current_weight, 'pr', max_value)
-        # for v in best_route:
-        #     print(v, best_island_trades[v])
         return max_value, best_route, best_island_trades, best_remain_swap_cost
 
     def virtual_execute_exchange(self, route, island_trades):

@@ -73,9 +73,14 @@ class Exchange:
             self.maximum_exchange = 2
 
         self.trades = 1000
-        self.remain_exchange = self.maximum_exchange if remain_exchange is None else remain_exchange
+        self._remain_exchange = remain_exchange
+        self.remain_exchange = self.maximum_exchange
+        self.reset_remain_exchange()
 
         self.price = self.get_price()
+
+    def reset_remain_exchange(self):
+        self.remain_exchange = self.maximum_exchange if self._remain_exchange is None else self._remain_exchange
 
     def get_price(self):
         if self.level == 5:
