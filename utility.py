@@ -8,7 +8,7 @@ Route_tuple = namedtuple('Route_tuple', ['name', 'stations'])
 
 
 def read_json(filename):
-    with open(filename, 'r') as f:
+    with open(filename, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 
@@ -21,8 +21,8 @@ class Save:
         self.__dict__.update(storage_object)
 
     def save_json(self, filename, data):
-        with open(f'{self.folder}/{filename}.json', 'w') as f:
-            json.dump(data, f)
+        with open(f'{self.folder}/{filename}.json', 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
 
     def read_json(self, filename):
         return read_json(f'{self.folder}/{filename}')

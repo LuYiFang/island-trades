@@ -5,9 +5,10 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PyQt5.QtGui import QColor, QPixmap
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QFileDialog, QScrollArea, QComboBox, QHBoxLayout, \
-    QSpinBox, QLabel, QCheckBox, QToolButton, QFrame, QSizePolicy
+    QSpinBox, QLabel, QCheckBox, QToolButton, QFrame, QTextEdit, QSizePolicy
 
 from Scheduler import Scheduler
+from exchange_items import default_amount
 
 
 class FileChooser(QWidget):
@@ -151,7 +152,7 @@ class ColorComboBox(QComboBox):
 
         text = self.itemData(index, Qt.DisplayRole)
         level = self.stock.item_level[text]
-        self.color_changed.emit([level, popup])
+        self.color_changed.emit([level, text, popup])
 
 
 class ItemGroup(QWidget):
@@ -187,6 +188,14 @@ class ItemGroup(QWidget):
             if ratio is not None:
                 self.ratio_input.setValue(ratio)
 
+            self.amount_input = QSpinBox()
+            self.amount_input.setRange(0, 10000)
+            self.amount_input.setValue(default_amount)
+
+            amount = self.stock.item_info.get(source, {}).get('amount')
+            if source is not None and amount:
+                self.amount_input.setValue(amount)
+
             self.swap_cost_input = QSpinBox()
             self.swap_cost_input.setRange(0, 100000)
             self.swap_cost_input.setValue(11220)
@@ -197,27 +206,32 @@ class ItemGroup(QWidget):
             layout.addWidget(self.item_combobox_source, 3)
             layout.addWidget(self.item_combobox_target, 3)
             layout.addWidget(self.ratio_input, 1)
+            layout.addWidget(self.amount_input, 1)
             layout.addWidget(self.swap_cost_input, 1)
 
             self.setLayout(layout)
 
             if default_values:
-                self.update_default_quantity([stock.item_level.get(source, 'normal'), False])
+                self.update_default_quantity([stock.item_level.get(source, 'normal'), source, False])
             else:
-                self.update_default_quantity(['normal', False])
+                self.update_default_quantity(['normal', self.stock.trade_items['normal'][0], False])
 
             self.item_combobox_source.color_changed.connect(self.update_default_quantity)
         except Exception as e:
             logging.exception(e)
 
     def update_default_quantity(self, params):
-        level, popup = params
+        level, item, popup = params
         if level == 'normal' or level == 4:
             self.ratio_input.setValue(1)
         elif level == 1 or level == 2:
             self.ratio_input.setValue(3)
         elif level == 3 or level == 5:
             self.ratio_input.setValue(2)
+
+        default_amount = self.stock.item_info.get(item, {}).get('amount')
+        if default_amount:
+            self.amount_input.setValue(default_amount)
 
         if not popup:
             return

@@ -264,6 +264,13 @@ class IslandGraph(Save):
 
                 nx_graph.add_edge(island, neighbor, weight=self.calculate_distance(island, neighbor))
 
-        shortest_path = nx_app.traveling_salesman_problem(nx_graph, cycle=False, method=nx_app.christofides)
+        shortest_path = nx_app.traveling_salesman_problem(nx_graph, cycle=True, method=nx_app.christofides)
+        print('shortest_path', shortest_path)
+
+        if shortest_path[0] != self.start_island and shortest_path[-1] != self.start_island:
+            start_island_index = shortest_path.index(self.start_island)
+            shortest_path = shortest_path[start_island_index:] + shortest_path[:start_island_index]
+            print('transfer path', shortest_path)
+
         shortest_path.remove(self.start_island)
         return shortest_path

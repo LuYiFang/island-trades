@@ -30,8 +30,8 @@ class Scheduler(Save):
         for island, args in exchanges.items():
             level = self.stock.item_level.get(args[1])
             weight = self.stock.item_weight.get(args[1])
-            source_img = self.stock.item_images.get(args[0], '')
-            target_img = self.stock.item_images.get(args[1], '')
+            source_img = self.stock.item_info.get(args[0], {}).get('img', '')
+            target_img = self.stock.item_info.get(args[1], {}).get('img', '')
             self.exchanges[island] = Exchange(
                 island, *args,
                 level, weight,

@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 )
 
 from Scheduler import Scheduler
-from UI_schedule import TopWidget, MiddleWidget, RouteViewWidget
+from UI_schedule import TopWidget, MiddleWidget, RouteViewWidget, HintWidget
 from UI_stock import StockWidget
 from UI_widget import FileChooser, Worker, CollapsibleSection
 
@@ -46,6 +46,7 @@ class MainWindow(QWidget):
                                           self.income_update_signal)
         self.save_exchange_button = QPushButton("Save Exchange")
         self.save_remain_exchange_button = QPushButton("Save Remain Exchange")
+        self.hint_view = HintWidget(self.stock)
         left_layout = self.add_left_area()
 
         self.stock_view = StockWidget(self.stock)
@@ -63,6 +64,7 @@ class MainWindow(QWidget):
         self.save_remain_exchange_button.clicked.connect(self.schedule.save_exchanges_remain)
 
         self.submit_button_signal.connect(self.route_view.update_routes)
+        self.submit_button_signal.connect(self.hint_view.generate_hints)
         self.stock_update_signal.connect(self.stock_view.update_items)
         self.income_update_signal.connect(self.top_view.update_income)
         self.top_view.add_item_signal.connect(self.middle_view.update_item_options)
@@ -80,17 +82,18 @@ class MainWindow(QWidget):
         upload_layout.addWidget(self.clean_button)
         left_layout.addLayout(upload_layout)
 
+        self.section_middle.add_widget(self.middle_view)
+        left_layout.addWidget(self.section_middle)
+
         action_layout = QHBoxLayout()
         action_layout.addWidget(self.save_exchange_button)
         action_layout.addWidget(self.save_remain_exchange_button)
         action_layout.addWidget(self.submit_button)
-
-        self.section_middle.add_widget(self.middle_view)
-        self.section_route_view.add_widget(self.route_view)
-        left_layout.addWidget(self.section_middle)
-
         left_layout.addLayout(action_layout)
 
+        left_layout.addWidget(self.hint_view)
+
+        self.section_route_view.add_widget(self.route_view)
         left_layout.addWidget(self.section_route_view)
 
         self.top_view.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -136,9 +139,12 @@ class MainWindow(QWidget):
                 island = group.island_combobox.currentText()
                 source = group.item_combobox_source.currentText()
                 target = group.item_combobox_target.currentText()
-                quantity = group.ratio_input.value()
+                ratio = group.ratio_input.value()
+                amount = group.amount_input.value()
+                if amount:
+                    self.stock.update_trade_items(source, amount)
                 swap_cost = group.swap_cost_input.value()
-                exchanges[island] = (source, target, quantity, swap_cost, group.remain_trades)
+                exchanges[island] = (source, target, ratio, swap_cost, group.remain_trades)
 
             self.worker = Worker(exchanges, self.schedule)
             self.worker.finished.connect(self.submit_button_signal.emit)

@@ -29,7 +29,7 @@ class Stock(Save):
         if not self.__dict__.get('_stock'):
             self._stock = {}
 
-        self.item_images = {}
+        self.item_info = {}
         self.set_stock_default()
         self.stock = self._calc_stock
 
@@ -48,13 +48,19 @@ class Stock(Save):
     def switch_stock(self, is_calc=False):
         self.stock = self._calc_stock if is_calc else self._stock
 
+    def update_item_info(self):
+        for items in self.trade_items.values():
+            for item in items:
+                self.item_info[item['name']] = item
+
     def set_stock_default(self):
         all_items = []
+
+        self.update_item_info()
 
         for items in self.trade_items.values():
             for item in items:
                 all_items.append(item['name'])
-                self.item_images[item['name']] = item.get('img', '')
 
         if not self.__dict__.get('_stock'):
             self._stock = {}
@@ -93,12 +99,21 @@ class Stock(Save):
         self._stock = self.ori_stock.copy()
         self._calc_stock = self.ori_stock.copy()
 
-    def update_trade_items(self, level, item):
+    def add_trade_items(self, level, item):
         self.trade_items[level].append({'name': item})
         self.item_level = self.update_item_level()
         self.item_weight = self.update_item_weight()
 
         self.set_stock_default()
+
+    def update_trade_items(self, item, amount):
+        level = self.item_level[item]
+
+        for item_info in self.trade_items[level]:
+            if item == item_info['name']:
+                item_info['amount'] = amount
+
+        self.update_item_info()
 
     def update_item_level(self):
         item_level = {}

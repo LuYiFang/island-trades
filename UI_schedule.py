@@ -1,12 +1,14 @@
 import logging
+from collections import defaultdict
 
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QSizePolicy, QLineEdit, QComboBox, \
     QPushButton, QCheckBox, QSpacerItem, QGroupBox
 
+from Stock import Stock
 from UI_widget import ScrollableWidget, ItemGroup, Station, PlotDrawer
-from exchange_items import default_ship_load_capacity, default_remain_swap_cost
+from exchange_items import default_ship_load_capacity, default_remain_swap_cost, default_amount
 from utility import read_json
 
 
@@ -129,7 +131,7 @@ class TopWidget(QWidget):
         except:
             pass
 
-        self.stock.update_trade_items(level, self.item_input.text())
+        self.stock.add_trade_items(level, self.item_input.text())
         self.add_item_signal.emit(self.item_input.text(), level)
         self.item_input.setText('')
 
@@ -166,6 +168,7 @@ class MiddleWidget(ScrollableWidget):
         header_layout.addWidget(QLabel('Source'), 3)
         header_layout.addWidget(QLabel('Target'), 3)
         header_layout.addWidget(QLabel('Ratio'), 1)
+        header_layout.addWidget(QLabel('Amount'), 1)
         header_layout.addWidget(QLabel('Swap Cost'), 1)
         self.add_layout_to_scroll(header_layout)
 
@@ -185,7 +188,7 @@ class MiddleWidget(ScrollableWidget):
 
     def add_item_group(self, island=None, source=None, target=None, ratio=None, swap_cost=None, remain_trades=None):
         group = ItemGroup(self.islands, self.stock, island, source, target, ratio, swap_cost, remain_trades)
-        self.insert_widget_to_scroll(len(self.item_groups)+1, group)
+        self.insert_widget_to_scroll(len(self.item_groups) + 1, group)
         self.item_groups.append(group)
         QTimer.singleShot(100, self.scroll_to_bottom)
         return group
@@ -220,6 +223,38 @@ class MiddleWidget(ScrollableWidget):
             if item is not None:
                 item.deleteLater()
         self.item_groups = []
+
+
+class HintWidget(QWidget):
+    def __init__(self, stock: Stock):
+        super().__init__()
+
+        self.layout = QVBoxLayout()
+        self.stock = stock
+        self.setLayout(self.layout)
+
+    def generate_hints(self, routes):
+        normal_count = defaultdict(int)
+        for group_name, route in routes:
+            for exchange, trades in route:
+                if exchange.level != 1:
+                    continue
+
+                normal_count[exchange.source] += \
+                    trades * self.stock.item_info.get(exchange.source, {}).get('amount', default_amount)
+
+        for i, (source, count) in enumerate(normal_count.items()):
+            if i % 2 == 0:
+                layout = QHBoxLayout()
+            self.create_hint(layout, source, count)
+            self.layout.addLayout(layout)
+
+    @staticmethod
+    def create_hint(layout, source, count):
+        source_label = QLabel(f'{source}: ')
+        trades_label = QLabel(f'{count}')
+        layout.addWidget(source_label)
+        layout.addWidget(trades_label)
 
 
 class RouteViewWidget(ScrollableWidget):
