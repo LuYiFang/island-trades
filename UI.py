@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 from Scheduler import Scheduler
 from UI_schedule import TopWidget, MiddleWidget, RouteViewWidget, HintWidget
 from UI_stock import StockWidget
-from UI_widget import FileChooser, Worker, CollapsibleSection
+from UI_widget import FileChooser, Worker, CollapsibleSection, Loading
 
 
 class MainWindow(QWidget):
@@ -25,28 +25,45 @@ class MainWindow(QWidget):
     def __init__(self, island_graph, stock):
         super(MainWindow, self).__init__()
 
+        self.setWindowTitle("Island Trade")
+        self.resize(1200, 900)
+        self.set_font()
+        self.set_theme()
+
         self.stock = stock
         self.island_graph = island_graph
         self.islands = sorted(list(island_graph.island_group_map.keys()))
         self.schedule = Scheduler(self.stock, self.island_graph)
 
-        self.set_font()
-        self.set_theme()
-
         main_layout = QHBoxLayout(self)
+
+        self.scheduling = Loading(self, 'Scheduling...')
 
         self.section_middle = CollapsibleSection()
         self.section_route_view = CollapsibleSection(False)
 
         self.top_view = TopWidget(self.stock, self.schedule)
-        self.clean_button = QPushButton("Clean")
-        self.submit_button = QPushButton("Submit")
         self.middle_view = MiddleWidget(self.islands, self.stock, self.upload_total_swap_cost_signal)
-        self.route_view = RouteViewWidget(self.stock, self.schedule, self.stock_update_signal,
-                                          self.income_update_signal)
-        self.save_exchange_button = QPushButton("Save Exchange")
-        self.save_remain_exchange_button = QPushButton("Save Remain Exchange")
         self.hint_view = HintWidget(self.stock)
+        self.route_view = RouteViewWidget(
+            self.stock, self.schedule, self.scheduling,
+            self.stock_update_signal, self.income_update_signal
+        )
+
+        self.clean_button = QPushButton("Clean")
+        self.clean_button.clicked.connect(self.middle_view.clean_view)
+
+        self.submit_button = QPushButton("Submit")
+        self.submit_button.clicked.connect(self.run_schedule)
+        self.submit_button_signal.connect(self.route_view.update_routes)
+        self.submit_button_signal.connect(self.hint_view.generate_hints)
+
+        self.save_exchange_button = QPushButton("Save Exchange")
+        self.save_exchange_button.clicked.connect(self.save_exchange)
+
+        self.save_remain_exchange_button = QPushButton("Save Remain Exchange")
+        self.save_remain_exchange_button.clicked.connect(self.schedule.save_exchanges_remain)
+
         left_layout = self.add_left_area()
 
         self.stock_view = StockWidget(self.stock)
@@ -55,16 +72,6 @@ class MainWindow(QWidget):
         main_layout.addLayout(left_layout, 1)
         main_layout.addLayout(right_layout, 1)
 
-        self.setWindowTitle("Island Trade")
-        self.resize(1200, 900)
-
-        self.clean_button.clicked.connect(self.middle_view.clean_view)
-        self.submit_button.clicked.connect(self.run_schedule)
-        self.save_exchange_button.clicked.connect(self.save_exchange)
-        self.save_remain_exchange_button.clicked.connect(self.schedule.save_exchanges_remain)
-
-        self.submit_button_signal.connect(self.route_view.update_routes)
-        self.submit_button_signal.connect(self.hint_view.generate_hints)
         self.stock_update_signal.connect(self.stock_view.update_items)
         self.income_update_signal.connect(self.top_view.update_income)
         self.top_view.add_item_signal.connect(self.middle_view.update_item_options)
@@ -130,12 +137,12 @@ class MainWindow(QWidget):
         self.schedule.save('save_exchanges')
 
     def run_schedule(self):
-        print('run_schedule')
+        self.scheduling.show_loading()
         self.section_middle.switch_content(False)
         self.section_route_view.switch_content(True)
         try:
             exchanges = {}
-            for group in self.middle_view.item_groups:
+            for group in self.middle_view.exchange_settings:
                 island = group.island_combobox.currentText()
                 source = group.item_combobox_source.currentText()
                 target = group.item_combobox_target.currentText()
@@ -146,13 +153,12 @@ class MainWindow(QWidget):
                 swap_cost = group.swap_cost_input.value()
                 exchanges[island] = (source, target, ratio, swap_cost, group.remain_trades)
 
-            self.worker = Worker(exchanges, self.schedule)
-            self.worker.finished.connect(self.submit_button_signal.emit)
-            self.worker.start()
+            worker = Worker(exchanges, self.schedule)
+            worker.finished.connect(self.submit_button_signal.emit)
+            worker.start()
             self.route_view.start_loading()
         except Exception as e:
             logging.exception(e)
-        print('run_schedule end')
 
     def closeEvent(self, a0):
         self.stock.save()

@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox,
     QPushButton, QCheckBox, QSpacerItem, QGroupBox
 
 from Stock import Stock
-from UI_widget import ScrollableWidget, ItemGroup, Station, PlotDrawer
+from UI_widget import ScrollableWidget, ExchangeSetting, Station, PlotDrawer
 from exchange_items import default_ship_load_capacity, default_remain_swap_cost, default_amount
 from utility import read_json
 
@@ -161,7 +161,7 @@ class MiddleWidget(ScrollableWidget):
         self.islands = islands
         self.stock = stock
         self.upload_total_swap_cost_signal = upload_total_swap_cost_signal
-        self.item_groups = []
+        self.exchange_settings = []
 
         header_layout = QHBoxLayout()
         header_layout.addWidget(QLabel('Island'), 2)
@@ -170,6 +170,7 @@ class MiddleWidget(ScrollableWidget):
         header_layout.addWidget(QLabel('Ratio'), 1)
         header_layout.addWidget(QLabel('Amount'), 1)
         header_layout.addWidget(QLabel('Swap Cost'), 1)
+        header_layout.addWidget(QLabel(''), 1)
         self.add_layout_to_scroll(header_layout)
 
         header_widget = QWidget()
@@ -187,9 +188,9 @@ class MiddleWidget(ScrollableWidget):
         self.add_item_group()
 
     def add_item_group(self, island=None, source=None, target=None, ratio=None, swap_cost=None, remain_trades=None):
-        group = ItemGroup(self.islands, self.stock, island, source, target, ratio, swap_cost, remain_trades)
-        self.insert_widget_to_scroll(len(self.item_groups) + 1, group)
-        self.item_groups.append(group)
+        group = ExchangeSetting(self, self.islands, self.stock, island, source, target, ratio, swap_cost, remain_trades)
+        self.insert_widget_to_scroll(len(self.exchange_settings) + 1, group)
+        self.exchange_settings.append(group)
         QTimer.singleShot(100, self.scroll_to_bottom)
         return group
 
@@ -212,28 +213,31 @@ class MiddleWidget(ScrollableWidget):
 
     def update_item_options(self, item, level):
         try:
-            for group in self.item_groups:
+            for group in self.exchange_settings:
                 group.item_combobox_source.update_option(item, level)
                 group.item_combobox_target.update_option(item, level)
         except Exception as e:
             logging.exception(e)
 
     def clean_view(self):
-        for item in self.item_groups:
+        for item in self.exchange_settings:
             if item is not None:
                 item.deleteLater()
-        self.item_groups = []
+        self.exchange_settings = []
 
 
 class HintWidget(QWidget):
     def __init__(self, stock: Stock):
         super().__init__()
 
+        self.rows = []
         self.layout = QVBoxLayout()
         self.stock = stock
         self.setLayout(self.layout)
 
     def generate_hints(self, routes):
+        self.clear_view()
+
         normal_count = defaultdict(int)
         for group_name, route in routes:
             for exchange, trades in route:
@@ -246,23 +250,47 @@ class HintWidget(QWidget):
         for i, (source, count) in enumerate(normal_count.items()):
             if i % 2 == 0:
                 layout = QHBoxLayout()
+                self.rows.append(layout)
             self.create_hint(layout, source, count)
             self.layout.addLayout(layout)
+
+        if len(normal_count) % 2 == 1:
+            layout.addStretch(1)
 
     @staticmethod
     def create_hint(layout, source, count):
         source_label = QLabel(f'{source}: ')
         trades_label = QLabel(f'{count}')
+        source_label.setAlignment(Qt.AlignLeft)
+        trades_label.setAlignment(Qt.AlignLeft)
+        source_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        trades_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        source_label.setStyleSheet("background-color: green; color: white;")
+        trades_label.setStyleSheet("background-color: blue; color: white;")
+
+        spacer = QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
         layout.addWidget(source_label)
+        layout.addItem(spacer)
         layout.addWidget(trades_label)
+
+    def clear_view(self):
+        if self.layout is None:
+            return
+
+        for row in self.rows:
+            if row is not None:
+                row.deleteLater()
+        self.rows = []
 
 
 class RouteViewWidget(ScrollableWidget):
-    def __init__(self, stock, schedule, stock_update_signal, income_update_signal):
+    def __init__(self, stock, schedule, scheduling, stock_update_signal, income_update_signal):
         super().__init__()
 
         self.stock = stock
         self.schedule = schedule
+        self.scheduling = scheduling
         self.stock_update_signal = stock_update_signal
         self.income_update_signal = income_update_signal
 
@@ -307,8 +335,8 @@ class RouteViewWidget(ScrollableWidget):
 
                 self.add_widget_to_scroll(group)
                 self.station_list.append(station)
-
         self.stop_loading()
+        self.scheduling.hide_loading()
 
     def clean_view(self):
         for group in self.group_list:

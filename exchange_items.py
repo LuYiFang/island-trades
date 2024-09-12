@@ -127,4 +127,4 @@ island_position = {
 
 default_ship_load_capacity = 12991
 default_remain_swap_cost = 1000000
-default_amount = 200
+default_amount = 1

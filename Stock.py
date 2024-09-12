@@ -11,7 +11,6 @@ class Stock(Save):
 
         self.ori_stock = {}
         self._calc_stock = {}
-        self.reserved_quantity = {}
 
         if not self.__dict__.get('trade_items'):
             self.trade_items = trade_items

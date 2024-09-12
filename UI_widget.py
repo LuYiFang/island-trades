@@ -155,11 +155,12 @@ class ColorComboBox(QComboBox):
         self.color_changed.emit([level, text, popup])
 
 
-class ItemGroup(QWidget):
-    def __init__(self, islands, stock, *default_values):
-        super(ItemGroup, self).__init__()
+class ExchangeSetting(QWidget):
+    def __init__(self, parent, islands, stock, *default_values):
+        super().__init__()
 
         self.stock = stock
+        self.parent = parent
 
         layout = QHBoxLayout()
 
@@ -202,12 +203,20 @@ class ItemGroup(QWidget):
             if swap_cost is not None:
                 self.ratio_input.setValue(swap_cost)
 
+            self.delete_button = QPushButton('X')
+            self.delete_button.setStyleSheet("QPushButton { border: none; }")
+            self.delete_button.setFixedSize(30, 30)
+            self.delete_button.clicked.connect(self.delete)
+            self.delete_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            self.delete_button.setContentsMargins(0, 0, 0, 0)
+
             layout.addWidget(self.island_combobox, 2)
             layout.addWidget(self.item_combobox_source, 3)
             layout.addWidget(self.item_combobox_target, 3)
             layout.addWidget(self.ratio_input, 1)
             layout.addWidget(self.amount_input, 1)
             layout.addWidget(self.swap_cost_input, 1)
+            layout.addWidget(self.delete_button, 1)
 
             self.setLayout(layout)
 
@@ -257,6 +266,13 @@ class ItemGroup(QWidget):
 
         check_and_scroll()
 
+    def delete(self):
+        try:
+            self.parent.exchange_settings.remove(self)
+            self.deleteLater()
+        except Exception as e:
+            logging.exception(e)
+
 
 class Station(QWidget):
     def __init__(self, exchange, num, stock, schedule: Scheduler, stock_update_signal, income_update_signal):
@@ -275,24 +291,31 @@ class Station(QWidget):
         pixmap_a = QPixmap(image_path_a).scaled(20, 20)
         pixmap_b = QPixmap(image_path_b).scaled(20, 20)
 
-        label_a = QLabel()
-        label_a.setPixmap(pixmap_a)
+        label_source_img = QLabel()
+        label_source_img.setPixmap(pixmap_a)
 
-        label_b = QLabel()
-        label_b.setPixmap(pixmap_b)
+        label_source_img = QLabel()
+        label_source_img.setPixmap(pixmap_b)
 
         self.checkbox = QCheckBox()
         self.checkbox.stateChanged.connect(self.on_checkbox_changed)
 
+        try:
+            display_num = num
+            if exchange.level == 1:
+                display_num = num * self.stock.item_info.get(exchange.source, {}).get('amount', default_amount)
+        except Exception as e:
+            logging.exception(e)
+
         layout = QHBoxLayout()
         layout.addWidget(self.checkbox)
-        layout.addWidget(QLabel(exchange.island))
-        layout.addWidget(label_a)
-        layout.addWidget(QLabel(exchange.source))
-        layout.addWidget(QLabel(f": {num}"))
-        layout.addWidget(QLabel(" -> "))
-        layout.addWidget(label_b)
-        layout.addWidget(QLabel(exchange.target))
+        layout.addWidget(QLabel(exchange.island), 2)
+        layout.addWidget(label_source_img, 1)
+        layout.addWidget(QLabel(exchange.source), 2)
+        layout.addWidget(QLabel(f": {display_num}"), 1)
+        layout.addWidget(QLabel("   -> "), 1)
+        layout.addWidget(label_source_img, 1)
+        layout.addWidget(QLabel(exchange.target), 2)
         self.setLayout(layout)
 
     def on_checkbox_changed(self, state):
@@ -357,3 +380,33 @@ class CollapsibleSection(QWidget):
 
     def add_widget(self, widget, *args):
         self.content_frame_layout.addWidget(widget, *args)
+
+
+class Loading(QWidget):
+    def __init__(self, parent, msg='Loading...'):
+        super().__init__()
+
+        self.parent = parent
+
+        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_NoSystemBackground)
+        self.setGeometry(parent.geometry())
+        self.setStyleSheet("background-color: rgba(0, 0, 0, 0.3);")
+
+        self.label = QLabel(msg)
+        self.label.setStyleSheet("color: white;")
+        self.label.setAlignment(Qt.AlignCenter)
+
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(self.label)
+
+        self.hide()
+        self.setLayout(self.layout)
+
+    def show_loading(self):
+        self.setGeometry(self.parent.geometry())
+        self.show()
+
+    def hide_loading(self):
+        self.hide()

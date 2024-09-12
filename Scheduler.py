@@ -79,7 +79,7 @@ class Scheduler(Save):
                 continue
 
             date = datetime.today().strftime('%Y%m%d')
-            filename = f'{self.__class__.__name__}_{target_name}_{date}_v{{}}'
+            filename = f'{target_name}_{date}_v{{}}'
             version = self.count_version(filename)
 
             self.save_json(filename.format(version + 1), target)
@@ -90,10 +90,12 @@ class Scheduler(Save):
         remain_swap_cost = self.total_swap_cost
         for island, exchange in self.exchanges.items():
             checked_station = self.checked_stations.get(island)
+            remain_trades = exchange.remain_exchange
             if checked_station:
                 remain_swap_cost -= checked_station.trades * exchange.swap_cost
+                remain_trades -= checked_station.trades
 
-            if exchange.remain_exchange <= 0:
+            if remain_trades <= 0:
                 continue
 
             exchanges_remain[island] = {
@@ -101,13 +103,13 @@ class Scheduler(Save):
                 'target': exchange.target,
                 'ratio': exchange.ratio,
                 'swap_cost': exchange.swap_cost,
-                'remain_trades': exchange.remain_exchange,
+                'remain_trades': remain_trades,
             }
 
         exchanges_remain['remain_swap_cost'] = remain_swap_cost
 
         date = datetime.today().strftime('%Y%m%d')
-        filename = f'{self.__class__.__name__}_exchanges_remain_{date}_v{{}}'
+        filename = f'remain_exchanges_{date}_v{{}}'
         version = self.count_version(filename)
 
         self.save_json(filename.format(version + 1), exchanges_remain)
