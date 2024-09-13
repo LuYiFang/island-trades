@@ -128,3 +128,13 @@ island_position = {
 default_ship_load_capacity = 12991
 default_remain_swap_cost = 1000000
 default_amount = 1
+
+level_colors = {
+    "normal": (255, 247, 217),
+    1: (161, 161, 161),
+    2: (109, 132, 17),
+    3: (64, 150, 193),
+    4: (170, 130, 63),
+    5: (209, 103, 90),
+    "material": (105, 90, 209)
+}

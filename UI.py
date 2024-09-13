@@ -1,21 +1,20 @@
 import logging
-from collections import defaultdict
 
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
 
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QPushButton, QHBoxLayout, QSplitter, QFrame, QSizePolicy,
+    QApplication, QVBoxLayout, QPushButton, QHBoxLayout, QSizePolicy
 )
 
 from Scheduler import Scheduler
 from UI_schedule import TopWidget, MiddleWidget, RouteViewWidget, HintWidget
 from UI_stock import StockWidget
-from UI_widget import FileChooser, Worker, CollapsibleSection, Loading
+from UI_widget import FileChooser, Worker, CollapsibleSection, WidgetView
 
 
-class MainWindow(QWidget):
+class MainWindow(WidgetView):
     submit_button_signal = QtCore.pyqtSignal(list)
     stock_update_signal = QtCore.pyqtSignal(list)
     income_update_signal = QtCore.pyqtSignal(int)
@@ -38,8 +37,6 @@ class MainWindow(QWidget):
 
             main_layout = QHBoxLayout(self)
 
-            self.scheduling = Loading(self, 'Scheduling...')
-
             self.section_middle = CollapsibleSection()
             self.section_route_view = CollapsibleSection(False)
 
@@ -47,7 +44,7 @@ class MainWindow(QWidget):
             self.middle_view = MiddleWidget(self.islands, self.stock, self.upload_total_swap_cost_signal)
             self.hint_view = HintWidget(self.stock)
             self.route_view = RouteViewWidget(
-                self.stock, self.schedule, self.scheduling,
+                self.stock, self.schedule,
                 self.stock_update_signal, self.income_update_signal
             )
 
@@ -55,10 +52,10 @@ class MainWindow(QWidget):
             self.clean_button.clicked.connect(self.middle_view.clean_view)
 
             self.submit_button = QPushButton("Submit")
+            self.submit_button.clicked.connect(self.run_schedule)
+            self.submit_button_signal.connect(self.route_view.update_routes)
+            self.submit_button_signal.connect(self.hint_view.generate_hints)
 
-
-        self.save_exchange_button = QPushButton("Save Exchange")
-        self.save_exchange_button.clicked.connect(self.save_exchange)
             self.save_exchange_button = QPushButton("Save Exchange")
             self.save_exchange_button.clicked.connect(self.save_exchange)
 
@@ -73,15 +70,12 @@ class MainWindow(QWidget):
             main_layout.addLayout(left_layout, 1)
             main_layout.addLayout(right_layout, 1)
 
-            self.submit_button.clicked.connect(self.run_schedule)
-            self.submit_button_signal.connect(self.route_view.update_routes)
-            self.submit_button_signal.connect(self.hint_view.generate_hints)
-
             self.stock_update_signal.connect(self.stock_view.update_items)
             self.income_update_signal.connect(self.top_view.update_income)
             self.top_view.add_item_signal.connect(self.middle_view.update_item_options)
             self.upload_exchange_signal.connect(self.middle_view.add_item_by_file)
             self.upload_total_swap_cost_signal.connect(self.top_view.update_total_swap_cost)
+            self.route_view.route_updated_signal.connect(self.enabled_view)
 
         except Exception as e:
             logging.exception(e)
@@ -90,7 +84,7 @@ class MainWindow(QWidget):
         left_layout = QVBoxLayout(self)
         self.setLayout(left_layout)
 
-        left_layout.addWidget(self.top_view, 1)
+        left_layout.addWidget(self.top_view)
 
         upload_layout = QHBoxLayout()
         upload_layout.addWidget(FileChooser('Open Exchanges File', self.upload_exchange_signal))
@@ -111,7 +105,6 @@ class MainWindow(QWidget):
         self.section_route_view.add_widget(self.route_view)
         left_layout.addWidget(self.section_route_view)
 
-        self.top_view.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         left_layout.setAlignment(Qt.AlignTop)
 
         return left_layout
@@ -144,10 +137,16 @@ class MainWindow(QWidget):
     def save_exchange(self):
         self.schedule.save('save_exchanges')
 
-    def run_schedule(self):
-        self.scheduling.show_loading()
+    def enabled_view(self, is_enabled):
+        self.top_view.setEnabled(is_enabled)
+        self.middle_view.setEnabled(is_enabled)
+        self.route_view.setEnabled(is_enabled)
+        self.stock_view.setEnabled(is_enabled)
+        self.setEnabled(is_enabled)
 
+    def run_schedule(self):
         try:
+            self.enabled_view(False)
             self.section_middle.switch_content(False)
             self.section_route_view.switch_content(True)
 

@@ -7,12 +7,12 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox,
     QPushButton, QCheckBox, QSpacerItem, QGroupBox
 
 from Stock import Stock
-from UI_widget import ScrollableWidget, ExchangeSetting, Station, PlotDrawer
+from UI_widget import ScrollableWidget, ExchangeSetting, Station, PlotDrawer, WidgetView
 from exchange_items import default_ship_load_capacity, default_remain_swap_cost, default_amount
 from utility import read_json
 
 
-class TopWidget(QWidget):
+class TopWidget(WidgetView):
     add_item_signal = QtCore.pyqtSignal(str, object)
 
     def __init__(self, stock, schedule):
@@ -28,7 +28,7 @@ class TopWidget(QWidget):
         self.level_combobox = None
         self.item_input = None
         self.income_count_label = None
-        self.layout = QVBoxLayout(self)
+        self.layout = QVBoxLayout()
 
         self.add_island_graph()
         self.add_load_layout()
@@ -38,7 +38,7 @@ class TopWidget(QWidget):
         self.setLayout(self.layout)
 
     def add_island_graph(self):
-        layout = QHBoxLayout(self)
+        layout = QHBoxLayout()
         island_graph = PlotDrawer('Island Graph', self.schedule.island_graph)
         island_group = PlotDrawer('Island Group', self.schedule.island_graph)
         group_graph = PlotDrawer('Group Graph', self.schedule.island_graph)
@@ -48,7 +48,7 @@ class TopWidget(QWidget):
         self.layout.addLayout(layout)
 
     def add_load_layout(self):
-        load_layout = QHBoxLayout(self)
+        load_layout = QHBoxLayout()
         load_label = QLabel('Ship Load Capacity: ')
         self.load_input = QSpinBox()
         self.load_input.setRange(0, 100000)
@@ -65,7 +65,7 @@ class TopWidget(QWidget):
         self.layout.addLayout(load_layout)
 
     def add_remain_swap_cost_layout(self):
-        swap_cost_layout = QHBoxLayout(self)
+        swap_cost_layout = QHBoxLayout()
         swap_cost_label = QLabel('Remain swap cost: ')
         self.swap_cost_input = QSpinBox()
         self.swap_cost_input.setRange(0, 1000000)
@@ -82,7 +82,7 @@ class TopWidget(QWidget):
         self.layout.addLayout(swap_cost_layout)
 
     def add_new_item_layout(self):
-        new_item_layout = QHBoxLayout(self)
+        new_item_layout = QHBoxLayout()
         self.item_input = QLineEdit()
         self.level_combobox = QComboBox()
         level_options = []
@@ -103,7 +103,7 @@ class TopWidget(QWidget):
         self.layout.addLayout(new_item_layout)
 
     def add_auto_sell_layout(self):
-        check_layout = QHBoxLayout(self)
+        check_layout = QHBoxLayout()
         self.checkbox = QCheckBox()
         self.checkbox.setChecked(True)
         label = QLabel('Auto Sell')
@@ -156,7 +156,7 @@ class TopWidget(QWidget):
 
 class MiddleWidget(ScrollableWidget):
     def __init__(self, islands, stock, upload_total_swap_cost_signal):
-        super(MiddleWidget, self).__init__()
+        super().__init__()
 
         self.islands = islands
         self.stock = stock
@@ -255,7 +255,7 @@ class HintWidget(QWidget):
             self.layout.addLayout(layout)
 
         if len(normal_count) % 2 == 1:
-            layout.addStretch(1)
+            self.add_empty_alignment(layout)
 
     @staticmethod
     def create_hint(layout, source, count):
@@ -265,14 +265,17 @@ class HintWidget(QWidget):
         trades_label.setAlignment(Qt.AlignLeft)
         source_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         trades_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        source_label.setStyleSheet("background-color: green; color: white;")
-        trades_label.setStyleSheet("background-color: blue; color: white;")
-
-        spacer = QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
         layout.addWidget(source_label)
-        layout.addItem(spacer)
         layout.addWidget(trades_label)
+
+    @staticmethod
+    def add_empty_alignment(layout):
+        empty_label = QLabel(' ')
+        empty_label2 = QLabel(' ')
+        layout.addWidget(empty_label)
+        layout.addWidget(empty_label2)
+        empty_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        empty_label2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     def clear_view(self):
         if self.layout is None:
@@ -285,12 +288,13 @@ class HintWidget(QWidget):
 
 
 class RouteViewWidget(ScrollableWidget):
-    def __init__(self, stock, schedule, scheduling, stock_update_signal, income_update_signal):
+    route_updated_signal = QtCore.pyqtSignal(bool)
+
+    def __init__(self, stock, schedule, stock_update_signal, income_update_signal):
         super().__init__()
 
         self.stock = stock
         self.schedule = schedule
-        self.scheduling = scheduling
         self.stock_update_signal = stock_update_signal
         self.income_update_signal = income_update_signal
 
@@ -336,7 +340,7 @@ class RouteViewWidget(ScrollableWidget):
                 self.add_widget_to_scroll(group)
                 self.station_list.append(station)
         self.stop_loading()
-        self.scheduling.hide_loading()
+        self.route_updated_signal.emit(True)
 
     def clean_view(self):
         for group in self.group_list:

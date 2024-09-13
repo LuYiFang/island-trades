@@ -5,10 +5,22 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PyQt5.QtGui import QColor, QPixmap
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QFileDialog, QScrollArea, QComboBox, QHBoxLayout, \
-    QSpinBox, QLabel, QCheckBox, QToolButton, QFrame, QTextEdit, QSizePolicy
+    QSpinBox, QLabel, QCheckBox, QToolButton, QFrame, QSizePolicy, QLineEdit
 
 from Scheduler import Scheduler
-from exchange_items import default_amount
+from exchange_items import default_amount, level_colors
+
+
+class WidgetView(QWidget):
+    def __init__(self):
+        super().__init__()
+
+    def setEnabled(self, is_enabled):
+        try:
+            for widget in self.findChildren((QPushButton, QSpinBox, QLineEdit, QComboBox, QCheckBox, QToolButton)):
+                widget.setEnabled(is_enabled)
+        except Exception as e:
+            logging.exception(e)
 
 
 class FileChooser(QWidget):
@@ -63,7 +75,7 @@ class Worker(QThread):
     finished = pyqtSignal(list)
 
     def __init__(self, exchanges, schedule):
-        super(Worker, self).__init__()
+        super().__init__()
         self.exchanges = exchanges
         self.schedule = schedule
 
@@ -76,9 +88,9 @@ class Worker(QThread):
             logging.exception(e)
 
 
-class ScrollableWidget(QWidget):
+class ScrollableWidget(WidgetView):
     def __init__(self):
-        super(ScrollableWidget, self).__init__()
+        super().__init__()
 
         self.scroll_area = QScrollArea(self)
         self.scroll_area.setWidgetResizable(True)
@@ -118,13 +130,7 @@ class ColorComboBox(QComboBox):
         self.stock = stock
 
         self.color_dict = {
-            "normal": QColor(255, 247, 217),
-            1: QColor(161, 161, 161),
-            2: QColor(109, 132, 17),
-            3: QColor(64, 150, 193),
-            4: QColor(170, 130, 63),
-            5: QColor(209, 103, 90),
-            "material": QColor(105, 90, 209)
+            level: QColor(*color) for level, color in level_colors.items()
         }
 
         self.init_options()
@@ -165,7 +171,6 @@ class ExchangeSetting(QWidget):
         layout = QHBoxLayout()
 
         try:
-
             island, source, target, ratio, swap_cost, self.remain_trades = None, None, None, None, None, None
             if default_values:
                 island, source, target, ratio, swap_cost, self.remain_trades = default_values
@@ -231,16 +236,16 @@ class ExchangeSetting(QWidget):
 
     def update_default_quantity(self, params):
         level, item, popup = params
-        if level == 'normal' or level == 4:
+        if level == 'normal' or level == 4 or level == 5:
             self.ratio_input.setValue(1)
         elif level == 1 or level == 2:
             self.ratio_input.setValue(3)
-        elif level == 3 or level == 5:
+        elif level == 3:
             self.ratio_input.setValue(2)
 
-        default_amount = self.stock.item_info.get(item, {}).get('amount')
-        if default_amount:
-            self.amount_input.setValue(default_amount)
+        amount = self.stock.item_info.get(item, {}).get('amount')
+        if amount:
+            self.amount_input.setValue(amount)
 
         if not popup:
             return
@@ -276,7 +281,7 @@ class ExchangeSetting(QWidget):
 
 class Station(QWidget):
     def __init__(self, exchange, num, stock, schedule: Scheduler, stock_update_signal, income_update_signal):
-        super(Station, self).__init__()
+        super().__init__()
 
         self.stock = stock
         self.schedule = schedule
@@ -300,12 +305,9 @@ class Station(QWidget):
         self.checkbox = QCheckBox()
         self.checkbox.stateChanged.connect(self.on_checkbox_changed)
 
-        try:
-            display_num = num
-            if exchange.level == 1:
-                display_num = num * self.stock.item_info.get(exchange.source, {}).get('amount', default_amount)
-        except Exception as e:
-            logging.exception(e)
+        display_num = num
+        if exchange.level == 1:
+            display_num = num * self.stock.item_info.get(exchange.source, {}).get('amount', default_amount)
 
         layout = QHBoxLayout()
         layout.addWidget(self.checkbox)
@@ -338,6 +340,7 @@ class CollapsibleSection(QWidget):
     def __init__(self, is_open=True):
         super().__init__()
         self.layout = QVBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
 
         self.toggle_button = QToolButton(checkable=True, checked=True)
         self.toggle_button.setStyleSheet("QToolButton { border: none; }")
@@ -360,12 +363,8 @@ class CollapsibleSection(QWidget):
         self.layout.setSpacing(0)
         self.setLayout(self.layout)
 
-        if is_open:
-            self.content_frame.show()
-            self.toggle_button.setArrowType(Qt.DownArrow)
-        else:
-            self.toggle_button.setArrowType(Qt.RightArrow)
-            self.content_frame.hide()
+        self.switch_content(is_open)
+
 
     def toggle_content(self):
         self.switch_content(self.toggle_button.isChecked())
@@ -380,33 +379,3 @@ class CollapsibleSection(QWidget):
 
     def add_widget(self, widget, *args):
         self.content_frame_layout.addWidget(widget, *args)
-
-
-class Loading(QWidget):
-    def __init__(self, parent, msg='Loading...'):
-        super().__init__()
-
-        self.parent = parent
-
-        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Dialog)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAttribute(Qt.WA_NoSystemBackground)
-        self.setGeometry(parent.geometry())
-        self.setStyleSheet("background-color: rgba(0, 0, 0, 0.3);")
-
-        self.label = QLabel(msg)
-        self.label.setStyleSheet("color: white;")
-        self.label.setAlignment(Qt.AlignCenter)
-
-        self.layout = QVBoxLayout()
-        self.layout.addWidget(self.label)
-
-        self.hide()
-        self.setLayout(self.layout)
-
-    def show_loading(self):
-        self.setGeometry(self.parent.geometry())
-        self.show()
-
-    def hide_loading(self):
-        self.hide()
