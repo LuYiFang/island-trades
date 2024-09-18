@@ -9,9 +9,9 @@ from PyQt5.QtWidgets import (
 )
 
 from Scheduler import Scheduler
-from UI_schedule import TopWidget, MiddleWidget, RouteViewWidget, HintWidget
-from UI_stock import StockWidget
-from UI_widget import FileChooser, Worker, CollapsibleSection, WidgetView
+from UI.UI_schedule import TopWidget, MiddleWidget, RouteViewWidget, HintWidget
+from UI.UI_stock import StockWidget
+from UI.UI_widget import FileChooser, Worker, CollapsibleSection, WidgetView
 
 
 class MainWindow(WidgetView):
@@ -174,30 +174,3 @@ class MainWindow(WidgetView):
         self.schedule.save_settings()
         self.stock.save()
         a0.accept()
-
-# 善用 networkx，路線相關的幾乎都能用吧?
-# 檢查演算法
-# 優化演算法
-
-
-# 已處理
-# 伊利 > 庭貝 > 奧眼得算一船負重
-# add item option會跳出來
-# 材料交換
-
-
-# 烏鴉幣 突發交換
-# normal 數量input
-# 刪除交換
-# 清除交換
-
-
-# 輸入剩餘 swap cost
-# 沒交換玩繼續交換 (route view勾勾自動更新middle)
-
-# 一趟島順序順了沒?
-
-
-# 看要不要加stock不足排除路線
-# UI 醜死了
-# schedule 中要不能操作

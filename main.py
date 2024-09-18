@@ -3,7 +3,8 @@ from PyQt5.QtWidgets import QApplication
 
 from Island import IslandGraph
 from Stock import Stock
-from UI import MainWindow
+from UI.UI import MainWindow
+
 
 if __name__ == '__main__':
     island_graph = IslandGraph('伊利亞')

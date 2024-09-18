@@ -3,7 +3,7 @@ import logging
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QPushButton, QGroupBox, QGridLayout, QLabel, QSpinBox, QVBoxLayout, QHBoxLayout
 
-from UI_widget import ScrollableWidget
+from UI.UI_widget import ScrollableWidget
 
 
 class StockWidget(ScrollableWidget):

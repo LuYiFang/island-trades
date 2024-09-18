@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox,
     QPushButton, QCheckBox, QSpacerItem, QGroupBox
 
 from Stock import Stock
-from UI_widget import ScrollableWidget, ExchangeSetting, Station, PlotDrawer, WidgetView
+from UI.UI_widget import ScrollableWidget, ExchangeSetting, Station, PlotDrawer, WidgetView
 from exchange_items import default_ship_load_capacity, default_remain_swap_cost, default_amount
 from utility import read_json
 
