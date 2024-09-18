@@ -74,14 +74,12 @@ class PlotDrawer(QWidget):
 class Worker(QThread):
     finished = pyqtSignal(list)
 
-    def __init__(self, exchanges, schedule):
+    def __init__(self, schedule):
         super().__init__()
-        self.exchanges = exchanges
         self.schedule = schedule
 
     def run(self):
         try:
-            self.schedule.add_trade(self.exchanges)
             routes = self.schedule.schedule_routes()
             self.finished.emit(routes)
         except Exception as e:
@@ -204,9 +202,11 @@ class ExchangeSetting(QWidget):
 
             self.swap_cost_input = QSpinBox()
             self.swap_cost_input.setRange(0, 100000)
-            self.swap_cost_input.setValue(11220)
+            self.swap_cost_input.setValue(self.parent.schedule.default_swap_cost)
             if swap_cost is not None:
                 self.ratio_input.setValue(swap_cost)
+
+            self.swap_cost_input.valueChanged.connect(self.on_swap_cost_changed)
 
             self.delete_button = QPushButton('X')
             self.delete_button.setStyleSheet("QPushButton { border: none; }")
@@ -277,6 +277,9 @@ class ExchangeSetting(QWidget):
             self.deleteLater()
         except Exception as e:
             logging.exception(e)
+
+    def on_swap_cost_changed(self):
+        self.parent.schedule.default_swap_cost = self.swap_cost_input.value()
 
 
 class Station(QWidget):
@@ -379,3 +382,4 @@ class CollapsibleSection(QWidget):
 
     def add_widget(self, widget, *args):
         self.content_frame_layout.addWidget(widget, *args)
+

@@ -5,7 +5,7 @@ from datetime import datetime
 
 from Island import IslandGraph
 from Stock import Stock
-from exchange_items import default_ship_load_capacity
+from exchange_items import default_ship_load_capacity, default_swap_cost
 from utility import Save, Exchange, Station_tuple, Route_tuple
 
 
@@ -13,16 +13,32 @@ class Scheduler(Save):
     def __init__(self, stock: Stock, island_graph: IslandGraph):
         super().__init__()
 
+        self.read_settings()
+
         self.exchanges = {}
         self.save_exchanges = {}
-        self.ship_load_capacity = default_ship_load_capacity
+
+        if not self.__dict__.get('ship_load_capacity'):
+            self.ship_load_capacity = default_ship_load_capacity
         self.stock = stock
         self.island_graph = island_graph
         self.start_island = island_graph.start_island
         self.min_swap_cost = None
         self.total_swap_cost = 1000000
 
+        if not self.__dict__.get('default_swap_cost'):
+            self.default_swap_cost = default_swap_cost
+
         self.checked_stations = {}
+        self.settings = {}
+
+    def read_settings(self):
+        settings = self.__dict__.get('settings')
+        if not settings:
+            return
+
+        self.ship_load_capacity = settings.get('ship_load_capacity', default_ship_load_capacity)
+        self.default_swap_cost = settings.get('default_swap_cost', default_swap_cost)
 
     def add_trade(self, exchanges: dict):
         self.save_exchanges = {}
@@ -72,7 +88,7 @@ class Scheduler(Save):
                 version = _version
         return version
 
-    def save(self, *args):
+    def save_exchanges_all(self, *args):
         for target_name in args:
             target = self.__dict__.get(target_name)
             if not target:
@@ -113,6 +129,13 @@ class Scheduler(Save):
         version = self.count_version(filename)
 
         self.save_json(filename.format(version + 1), exchanges_remain)
+
+    def save_settings(self):
+        self.settings = {
+            'ship_load_capacity': self.ship_load_capacity,
+            'default_swap_cost': self.default_swap_cost,
+        }
+        self.save('settings')
 
     def execute_exchange(self, exchange: Exchange, trades, route_id):
         self.stock.execute_exchange(exchange, trades, route_id)
@@ -203,8 +226,6 @@ class Scheduler(Save):
             self.exchanges
         )
 
-        # print('=========pr========', pr, route)
-
         # 避免 maximum recursion depth exceeded
         if not route:
             print('no route', island, self.exchanges[island].remain_exchange, swap_cost)
@@ -212,8 +233,6 @@ class Scheduler(Save):
 
         route_exchanges = self.virtual_execute_exchange(route, island_trades)
         index += 1
-
-        # print('route_exchanges', route_exchanges)
 
         group = [Route_tuple(f'Group {index}', route_exchanges)]
 

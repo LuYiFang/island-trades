@@ -16,10 +16,7 @@ from UI_widget import FileChooser, Worker, CollapsibleSection, WidgetView
 
 class MainWindow(WidgetView):
     submit_button_signal = QtCore.pyqtSignal(list)
-    stock_update_signal = QtCore.pyqtSignal(list)
-    income_update_signal = QtCore.pyqtSignal(int)
     upload_exchange_signal = QtCore.pyqtSignal(str)
-    upload_total_swap_cost_signal = QtCore.pyqtSignal(int)
 
     def __init__(self, island_graph, stock):
         super(MainWindow, self).__init__()
@@ -41,12 +38,9 @@ class MainWindow(WidgetView):
             self.section_route_view = CollapsibleSection(False)
 
             self.top_view = TopWidget(self.stock, self.schedule)
-            self.middle_view = MiddleWidget(self.islands, self.stock, self.upload_total_swap_cost_signal)
+            self.middle_view = MiddleWidget(self.islands, self.stock, self.schedule)
             self.hint_view = HintWidget(self.stock)
-            self.route_view = RouteViewWidget(
-                self.stock, self.schedule,
-                self.stock_update_signal, self.income_update_signal
-            )
+            self.route_view = RouteViewWidget(self.stock, self.schedule)
 
             self.clean_button = QPushButton("Clean")
             self.clean_button.clicked.connect(self.middle_view.clean_view)
@@ -70,11 +64,11 @@ class MainWindow(WidgetView):
             main_layout.addLayout(left_layout, 1)
             main_layout.addLayout(right_layout, 1)
 
-            self.stock_update_signal.connect(self.stock_view.update_items)
-            self.income_update_signal.connect(self.top_view.update_income)
+            self.route_view.stock_update_signal.connect(self.stock_view.update_items)
+            self.route_view.income_update_signal.connect(self.top_view.update_income)
             self.top_view.add_item_signal.connect(self.middle_view.update_item_options)
             self.upload_exchange_signal.connect(self.middle_view.add_item_by_file)
-            self.upload_total_swap_cost_signal.connect(self.top_view.update_total_swap_cost)
+            self.middle_view.upload_total_swap_cost_signal.connect(self.top_view.update_total_swap_cost)
             self.route_view.route_updated_signal.connect(self.enabled_view)
 
         except Exception as e:
@@ -135,7 +129,11 @@ class MainWindow(WidgetView):
                 """)
 
     def save_exchange(self):
-        self.schedule.save('save_exchanges')
+        try:
+            self.update_exchanges()
+            self.schedule.save_exchanges_all('save_exchanges')
+        except Exception as e:
+            logging.exception(e)
 
     def enabled_view(self, is_enabled):
         self.top_view.setEnabled(is_enabled)
@@ -144,25 +142,28 @@ class MainWindow(WidgetView):
         self.stock_view.setEnabled(is_enabled)
         self.setEnabled(is_enabled)
 
+    def update_exchanges(self):
+        exchanges = {}
+        for group in self.middle_view.exchange_settings:
+            island = group.island_combobox.currentText()
+            source = group.item_combobox_source.currentText()
+            target = group.item_combobox_target.currentText()
+            ratio = group.ratio_input.value()
+            amount = group.amount_input.value()
+            if amount:
+                self.stock.update_trade_items(source, amount)
+            swap_cost = group.swap_cost_input.value()
+            exchanges[island] = (source, target, ratio, swap_cost, group.remain_trades)
+        self.schedule.add_trade(exchanges)
+
     def run_schedule(self):
         try:
             self.enabled_view(False)
             self.section_middle.switch_content(False)
             self.section_route_view.switch_content(True)
 
-            exchanges = {}
-            for group in self.middle_view.exchange_settings:
-                island = group.island_combobox.currentText()
-                source = group.item_combobox_source.currentText()
-                target = group.item_combobox_target.currentText()
-                ratio = group.ratio_input.value()
-                amount = group.amount_input.value()
-                if amount:
-                    self.stock.update_trade_items(source, amount)
-                swap_cost = group.swap_cost_input.value()
-                exchanges[island] = (source, target, ratio, swap_cost, group.remain_trades)
-
-            self.worker = Worker(exchanges, self.schedule)
+            self.update_exchanges()
+            self.worker = Worker(self.schedule)
             self.worker.finished.connect(self.submit_button_signal.emit)
             self.worker.start()
             self.route_view.start_loading()
@@ -170,6 +171,7 @@ class MainWindow(WidgetView):
             logging.exception(e)
 
     def closeEvent(self, a0):
+        self.schedule.save_settings()
         self.stock.save()
         a0.accept()
 

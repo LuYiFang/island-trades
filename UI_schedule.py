@@ -52,7 +52,7 @@ class TopWidget(WidgetView):
         load_label = QLabel('Ship Load Capacity: ')
         self.load_input = QSpinBox()
         self.load_input.setRange(0, 100000)
-        self.load_input.setValue(default_ship_load_capacity)
+        self.load_input.setValue(self.schedule.ship_load_capacity)
 
         self.load_input.valueChanged.connect(self.on_load_value_changed)
 
@@ -155,12 +155,14 @@ class TopWidget(WidgetView):
 
 
 class MiddleWidget(ScrollableWidget):
-    def __init__(self, islands, stock, upload_total_swap_cost_signal):
+    upload_total_swap_cost_signal = QtCore.pyqtSignal(int)
+
+    def __init__(self, islands, stock, schedule):
         super().__init__()
 
         self.islands = islands
         self.stock = stock
-        self.upload_total_swap_cost_signal = upload_total_swap_cost_signal
+        self.schedule = schedule
         self.exchange_settings = []
 
         header_layout = QHBoxLayout()
@@ -289,14 +291,14 @@ class HintWidget(QWidget):
 
 class RouteViewWidget(ScrollableWidget):
     route_updated_signal = QtCore.pyqtSignal(bool)
+    stock_update_signal = QtCore.pyqtSignal(list)
+    income_update_signal = QtCore.pyqtSignal(int)
 
-    def __init__(self, stock, schedule, stock_update_signal, income_update_signal):
+    def __init__(self, stock, schedule):
         super().__init__()
 
         self.stock = stock
         self.schedule = schedule
-        self.stock_update_signal = stock_update_signal
-        self.income_update_signal = income_update_signal
 
         self.station_list = []
         self.group_list = []

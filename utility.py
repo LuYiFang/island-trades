@@ -3,6 +3,8 @@ import math
 import os
 from collections import namedtuple
 
+from exchange_items import default_swap_cost
+
 Station_tuple = namedtuple('Station_tuple', ['exchange', 'trades'])
 Route_tuple = namedtuple('Route_tuple', ['name', 'stations'])
 
@@ -50,7 +52,7 @@ class Save:
 class Exchange:
     def __init__(
             self,
-            island, source, target, ratio, swap_cost=11220, remain_exchange=None,
+            island, source, target, ratio, swap_cost=default_swap_cost, remain_exchange=None,
             level=None, weight=0, priority=1,
             source_img='', target_img='',
     ):
