@@ -140,12 +140,22 @@ class Scheduler(Save):
     def execute_exchange(self, exchange: Exchange, trades, route_id):
         self.stock.execute_exchange(exchange, trades, route_id)
 
-        self.checked_stations[exchange.island] = Station_tuple(exchange, trades)
+        new_trades = trades
+        if self.checked_stations.get(exchange.island):
+            new_trades += self.checked_stations[exchange.island].trades
+        self.checked_stations[exchange.island] = Station_tuple(exchange, new_trades)
 
     def undo_execute_exchange(self, exchange: Exchange, trades, route_id):
         self.stock.undo_execute_exchange(exchange, trades, route_id)
 
-        del self.checked_stations[exchange.island]
+        if not self.checked_stations.get(exchange.island):
+            return
+
+        new_trades = self.checked_stations[exchange.island].trades - trades
+        if new_trades <= 0:
+            del self.checked_stations[exchange.island]
+            return
+        self.checked_stations[exchange.island] = Station_tuple(exchange, new_trades)
 
     def get_swap_cost(self):
         return min(self.exchanges.values(), key=lambda x: x.swap_cost).swap_cost
