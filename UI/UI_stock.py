@@ -4,6 +4,7 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QPushButton, QGroupBox, QGridLayout, QLabel, QSpinBox, QVBoxLayout, QHBoxLayout
 
 from UI.UI_widget import ScrollableWidget
+from utility import resource_path
 
 
 class StockWidget(ScrollableWidget):
@@ -36,7 +37,7 @@ class StockWidget(ScrollableWidget):
             groupbox = QGroupBox(f"Level {level}")
             grid_layout = QGridLayout()
             for item_index, item in enumerate(item_list):
-                image_path = f"static/{item['img']}"
+                image_path = resource_path(f"static/{item['img']}")
 
                 label_image = QLabel()
                 pixmap = QPixmap(image_path).scaled(50, 50)

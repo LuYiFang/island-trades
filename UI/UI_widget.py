@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QFileDialog, QScr
 
 from Scheduler import Scheduler
 from exchange_items import default_amount, level_colors
+from utility import resource_path
 
 
 class WidgetView(QWidget):
@@ -293,8 +294,8 @@ class Station(QWidget):
         self.stock_update_signal = stock_update_signal
         self.income_update_signal = income_update_signal
 
-        image_path_a = f"static/{exchange.source_img}"
-        image_path_b = f"static/{exchange.target_img}"
+        image_path_a = resource_path(f"static/{exchange.source_img}")
+        image_path_b = resource_path(f"static/{exchange.target_img}")
 
         pixmap_a = QPixmap(image_path_a).scaled(20, 20)
         pixmap_b = QPixmap(image_path_b).scaled(20, 20)

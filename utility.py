@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import sys
 from collections import namedtuple
 
 from exchange_items import default_swap_cost
@@ -113,3 +114,12 @@ class Exchange:
             available_stock,
             max_swap_cost,
         )
+
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
