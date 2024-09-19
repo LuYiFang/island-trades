@@ -205,7 +205,6 @@ class Scheduler(Save):
             self.reset_all_exchanges()
         except Exception as e:
             logging.exception(e)
-        print('schedule_routes end')
         return best_routes
 
     def find_specify_route(self, start_island, end_island, remain_swap_cost):

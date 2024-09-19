@@ -3,7 +3,7 @@ import logging
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
 
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtWidgets import (
     QApplication, QVBoxLayout, QPushButton, QHBoxLayout, QSizePolicy
 )
@@ -12,6 +12,7 @@ from Scheduler import Scheduler
 from UI.UI_schedule import TopWidget, MiddleWidget, RouteViewWidget, HintWidget
 from UI.UI_stock import StockWidget
 from UI.UI_widget import FileChooser, Worker, CollapsibleSection, WidgetView
+from utility import resource_path
 
 
 class MainWindow(WidgetView):
@@ -23,6 +24,7 @@ class MainWindow(WidgetView):
 
         try:
             self.setWindowTitle("Island Trade")
+            self.setWindowIcon(QIcon(resource_path('static/icon.ico')))
             self.resize(1200, 900)
             self.set_font()
             self.set_theme()
