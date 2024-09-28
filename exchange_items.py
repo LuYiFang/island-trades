@@ -40,7 +40,6 @@ trade_items = {
         {'name': '紫水晶', 'img': '紫水晶.png'}, {'name': '五彩線團', 'img': '五彩線團.png'},
         ],
     5: [{'name': '黃金草', 'img': '黃金草.png'}, {'name': '37年', 'img': '37年.png'},
-
         {'name': '岩石', 'img': '岩石.png'}, {'name': '保管箱', 'img': '保管箱.png'},
         {'name': '弄蝶標本', 'img': '弄蝶標本.png'}, {'name': '黃金燭台', 'img': '黃金燭台.png'},
         {'name': '幼蟲', 'img': '幼蟲.png'}, {'name': '藍光石英', 'img': '藍光石英.png'},

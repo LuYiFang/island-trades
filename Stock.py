@@ -22,6 +22,10 @@ class Stock(Save):
                 except:
                     pass
 
+                if level == 'normal' or level == 'material':
+                    int_trade_items[level] = sorted(items, key=lambda x: len(x['name']))
+                    continue
+
                 order_items = {item['name']: i for i, item in enumerate(trade_items[level])}
                 int_trade_items[level] = sorted(items, key=lambda x: order_items.get(x['name'], -float('inf')))
             self.trade_items = int_trade_items
