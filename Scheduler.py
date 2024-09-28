@@ -74,6 +74,12 @@ class Scheduler(Save):
 
             exchange.priority += self.scale_to_range(- self.stock[exchange.target], -stock_min, -stock_max)
             exchange.priority += self.scale_to_range(exchange.price, 2000000, 7500000)
+            exchange.priority += self.scale_to_range(
+                self.stock.reserved_quantity[exchange.target],
+                0, max(self.stock.reserved_quantity.values())
+            )
+            if exchange.level == 'material':
+                exchange.priority += 10
 
     def count_version(self, filename):
         version = 1
@@ -178,13 +184,14 @@ class Scheduler(Save):
             start_island_exchange = self.exchanges.get(self.start_island)
             if start_island_exchange:
                 available_stock = self.stock.count_available_stock(start_island_exchange)
-                max_trades = start_island_exchange.count_max_allowable_trades(
-                    100000000,
-                    available_stock,
-                    remain_swap_cost
-                )
-                route_exchanges = self.virtual_execute_exchange({self.start_island}, {self.start_island: max_trades})
-                best_routes.append(Route_tuple(f'{self.start_island}', route_exchanges))
+                if available_stock > 0:
+                    max_trades = start_island_exchange.count_max_allowable_trades(
+                        100000000,
+                        available_stock,
+                        remain_swap_cost
+                    )
+                    route_exchanges = self.virtual_execute_exchange({self.start_island}, {self.start_island: max_trades})
+                    best_routes.append(Route_tuple(f'{self.start_island}', route_exchanges))
 
             # 伊利亞 - 貝村
             route_exchanges, remain_swap_cost = self.find_specify_route(self.start_island, '貝村',
@@ -256,7 +263,7 @@ class Scheduler(Save):
     def route_dp(self, state, visited, island_trades, exchanges):
         current_island, current_weight, current_swap_cost, current_priority = state
 
-        if current_weight > self.ship_load_capacity - 100 or current_swap_cost <= 0:
+        if current_weight > self.ship_load_capacity - 100 or current_swap_cost <= self.min_swap_cost:
             return current_priority, visited, island_trades, current_swap_cost
 
         if len(exchanges) == len(visited):

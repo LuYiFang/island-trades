@@ -22,7 +22,8 @@ class Stock(Save):
                 except:
                     pass
 
-                int_trade_items[level] = items
+                order_items = {item['name']: i for i, item in enumerate(trade_items[level])}
+                int_trade_items[level] = sorted(items, key=lambda x: order_items.get(x['name'], -float('inf')))
             self.trade_items = int_trade_items
 
         if not self.__dict__.get('_stock'):
@@ -132,7 +133,7 @@ class Stock(Save):
                     weight = 800
                 elif level == 3:
                     weight = 900
-                elif level == 4 or level == 5:
+                elif level == 4 or level == 5 or level == 'material':
                     weight = 1000
                 item_weight[item['name']] = weight
         return item_weight

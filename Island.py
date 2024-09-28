@@ -127,8 +127,8 @@ class IslandGraph(Save):
 
     def get_variable_group(self, is_group):
         return self.group_graph if is_group else self.graph, \
-               self.group_position if is_group else self.island_positions, \
-               self.group_nx_graph if is_group else self.island_nx_graph
+            self.group_position if is_group else self.island_positions, \
+            self.group_nx_graph if is_group else self.island_nx_graph
 
     def create_graph_from_positions(self, is_group, max_distance=9):
         graph_map, position_map, nx_graph = self.get_variable_group(is_group)
@@ -245,12 +245,17 @@ class IslandGraph(Save):
             'group_position',
         )
 
-    def find_best_path(self, islands):
+    def find_best_path(self, islands: list):
         if len(islands) <= 1:
             return islands
 
         if sys.version_info.major < 3 or sys.version_info.minor <= 6:
             return islands
+
+        exclude_start_island = False
+        if self.start_island not in islands:
+            islands.append(self.start_island)
+            exclude_start_island = True
 
         nx_graph = nx.Graph()
         for island in islands:
@@ -260,5 +265,14 @@ class IslandGraph(Save):
 
                 nx_graph.add_edge(island, neighbor, weight=self.calculate_distance(island, neighbor))
 
-        shortest_path = nx_app.traveling_salesman_problem(nx_graph, cycle=False, method=nx_app.christofides)
+        shortest_path = nx_app.traveling_salesman_problem(nx_graph, cycle=True, method=nx_app.christofides)
+        shortest_path = list(dict.fromkeys(shortest_path).keys())
+
+        if shortest_path[0] != self.start_island or shortest_path[-1] != self.start_island:
+            start_index = shortest_path.index(self.start_island)
+            shortest_path = shortest_path[start_index:] + shortest_path[:start_index]
+
+        if exclude_start_island:
+            shortest_path.remove(self.start_island)
+
         return shortest_path
